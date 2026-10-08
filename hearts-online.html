@@ -1063,7 +1063,7 @@ const Common = (() => {
 
   /* ---------- boot ---------- */
   function boot() {
-    UI.mount({ card: onCard, action: onAction, menu, scores: showScores, last: showLast });
+    UI.mount({ card: onCard, action: onAction, table: onTable, menu, scores: showScores, last: showLast });
     UI.applyLang('titleOnline');
     UI.render(emptyView());
     if (typeof firebase === 'undefined' || !FIREBASE_CONFIG.apiKey) return setupNeeded();
@@ -1567,6 +1567,11 @@ const Common = (() => {
       else { armed = id; redraw(); }
     }
   }
+  const soloVsBots = seat => [0, 1, 2, 3].every(s => s === seat || isBot(s));
+  function onTable() {
+    // tap the table to sweep a finished trick away — only when the other three seats are all bots
+    if (pub && pub.phase === 'trickEnd' && soloVsBots(mySeat)) send({ type: 'collect' });
+  }
   function onAction(k) {
     if (k === 'pass' && sel.size === 3 && !sent) { sent = true; send({ type: 'pass', cards: [...sel] }); redraw(); }
     if (k === 'revealOk' && pub) { revealAck = pub.handNum; redraw(); }
@@ -1642,6 +1647,7 @@ const Common = (() => {
     else if (a.type === 'play') { const ask = Hearts.canFinish(g); ok = Hearts.playCard(g, seat, a.card); if (ok && ask) g.playOut = true; }
     else if (a.type === 'ready') ok = Hearts.setReady(g, seat);
     else if (a.type === 'claimOk') ok = Hearts.ackClaim(g, seat);
+    else if (a.type === 'collect') { if (!soloVsBots(seat)) return; ok = Hearts.collectTrick(g); if (!ok) return; }
     if (ok) hostStep(); else hostPublish(); // republish so the client un-sticks
   }
   function hostAutoBots() {
