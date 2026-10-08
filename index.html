@@ -168,6 +168,22 @@ table.sc .best{color:var(--card-red)}
 tr.clk{cursor:pointer}
 tr.clk:hover td{background:rgba(201,162,74,.12)}
 .sheet .row .btn{flex:1 1 auto}
+.adm-sub{font-size:.85rem;color:var(--muted);margin:2px 0}
+.adm-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 6px}
+.adm-tab.on{background:var(--brass);color:#2b0a11;border-color:var(--brass)}
+.adm-n{display:inline-block;min-width:1.4em;padding:0 5px;border-radius:999px;background:var(--card-red);color:#fff;font-size:.75rem;text-align:center}
+.adm-card{border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:8px 0}
+.adm-card.dim{opacity:.7}
+.adm-note{margin:6px 0;padding:6px 8px;border-radius:8px;background:var(--bg);font-size:.9rem}
+.adm-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.adm-row .btn{padding:7px 16px;font-size:.92rem}
+.sheet .adm-row .btn.ghost{color:var(--ink);border-color:var(--line)}
+.adm-seats{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.adm-seat{font-size:.85rem;padding:2px 8px;border-radius:999px;background:var(--bg);display:inline-flex;align-items:center;gap:5px}
+.adm-seat.empty{opacity:.5}
+.adm-seat .dot{width:7px;height:7px;border-radius:50%;background:#b9a0a6;display:inline-block}
+.adm-seat .dot.on{background:#3a9d4a}
+
 
 .rv{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
 .rv:last-of-type{border-bottom:0}
@@ -1053,11 +1069,7 @@ const Common = (() => {
     if (typeof firebase === 'undefined' || !FIREBASE_CONFIG.apiKey) return setupNeeded();
     firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database();
-    firebase.auth().onAuthStateChanged(u => {
-      if (!u) return;
-      if (uid) return; uid = u.uid; lobby();
-    });
-    firebase.auth().signInAnonymously().catch(e => lobbyError(t('authFail', e.message)));
+    startAuth();
   }
   function emptyView() {
     return { mySeat: 0, players: four({ name: '' }), hand: [], trick: [], phase: 'lobby', status: '' };
@@ -1074,12 +1086,15 @@ const Common = (() => {
       <p>${t('lobbyP')}</p>
       <div class="field"><label for="nm">${t('yourName')}</label><input id="nm" maxlength="14" autocomplete="nickname" value="${UI.esc(savedName())}"></div>
       <div class="field"><label for="cd">${t('roomCode')}</label><input id="cd" class="code" maxlength="4" value="${UI.esc(urlCode)}" placeholder="ABCD"></div>
-      <div class="err" id="err">${UI.esc(err)}</div>`,
+      <div class="err" id="err">${UI.esc(err)}</div>
+      <p class="adm-sub" id="hoststat">${hostStatusHTML()}</p>`,
       [{ label: t(urlCode ? 'joinRoom' : 'createRoom'), onClick: () => go(urlCode ? 'join' : 'create') },
        { label: t(urlCode ? 'createRoom' : 'joinRoom'), ghost: true, onClick: () => go(urlCode ? 'create' : 'join') },
        { label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => {
          const nm = document.getElementById('nm').value, cd = document.getElementById('cd').value;
-         switchLang(); lobby(); document.getElementById('nm').value = nm; document.getElementById('cd').value = cd; } }]);
+         switchLang(); lobby(); document.getElementById('nm').value = nm; document.getElementById('cd').value = cd; } },
+       ...(isAdmin() ? [{ label: '🛠 ' + h('adminBtn'), ghost: true, onClick: adminScreen }] : []),
+       ...(isEmailUser() ? [{ label: h('signOut'), ghost: true, onClick: signOut }] : [])]);
     sheet.querySelector('#nm').focus();
   }
   function lobbyError(msg) { const e = document.getElementById('err'); if (e) e.textContent = msg; else lobby(msg); }
@@ -1089,7 +1104,7 @@ const Common = (() => {
     if (!name) return lobbyError(t('needYourName'));
     try { localStorage.setItem('hearts-name', name); } catch (e) {}
     try {
-      if (kind === 'create') await createRoom(name);
+      if (kind === 'create') { if (!canHost()) return hostAccess(name); await createRoom(name); }
       else { if (c.length !== 4) return lobbyError(t('codeLen')); await joinRoom(c, name); }
     } catch (e) { lobbyError(e.message || String(e)); }
   }
@@ -1100,7 +1115,7 @@ const Common = (() => {
       if (!(await db.ref('rooms/' + c + '/meta').get()).exists()) break;
     }
     code = c; room = db.ref('rooms/' + code);
-    await room.child('meta').set({ host: uid, created: TS() });
+    await room.child('meta').set({ host: uid, created: TS(), hostName: name, hostEmail: (authUser && authUser.email) || '' });
     await room.child('players/0').set({ uid, name, online: true });
     await room.child('state').set({ phase: 'lobby' });
     mySeat = 0; enter();
@@ -1121,6 +1136,267 @@ const Common = (() => {
       if (res.committed) { mySeat = s; return enter(); }
     }
     throw new Error(t('full'));
+  }
+
+  /* ---------- host access & admin ---------- */
+  const ADMIN_EMAIL = 'pspcom@gmail.com';
+  const H2 = {
+    he: {
+      hostH: 'פתיחת שולחן', hostP: 'רק מארחים שמנהל המשחק אישר יכולים לפתוח שולחנות. התחבר עם חשבון ה־Google שלך כדי שנבדוק אם אתה ברשימה.',
+      google: 'התחבר עם Google', loginFail: m => 'ההתחברות נכשלה: ' + m,
+      emailLbl: 'כתובת מייל', badEmail: 'כתובת המייל לא תקינה.',
+      reqH: 'אין לך הרשאה לפתוח שולחן', reqP: e => `החשבון <b dir="ltr">${e}</b> לא ברשימת המארחים המאושרים. אפשר לשלוח בקשה למנהל המשחק, וכשהוא יאשר תוכל לפתוח שולחנות. בינתיים אפשר להצטרף לשולחנות של אחרים.`,
+      nameLbl: 'שם', noteLbl: 'הודעה למנהל (לא חובה)', sendReq: 'שלח בקשה', needName: 'כתוב שם.',
+      pendingH: 'הבקשה נשלחה', pendingP: 'הבקשה ממתינה לאישור המנהל. אפשר להשאיר את הדף פתוח: ברגע שהיא תאושר יופיע כאן כפתור לפתיחת שולחן. בינתיים אפשר להצטרף לשולחנות של אחרים.',
+      rejectedH: 'הבקשה נדחתה', rejectedP: 'מנהל המשחק לא אישר את הבקשה. עדיין אפשר להצטרף לשולחנות של אחרים מקישור.', reqAgain: 'שלח בקשה שוב',
+      approvedH: 'הבקשה אושרה! 🎉', approvedP: 'מעכשיו אתה יכול לפתוח שולחנות.', approvedYou: 'ההרשאה שלך לפתוח שולחנות פעילה.',
+      signedAs: e => `מחובר כ־<bdi dir="ltr">${e}</bdi>`, stAdmin: 'מנהל', stHost: 'מארח מאושר', stNone: 'ללא הרשאה לפתוח שולחן',
+      signOut: 'התנתק', adminBtn: 'ניהול',
+      notAdminH: 'אין הרשאת ניהול', notAdminP: e => `אתה מחובר כ־<b dir="ltr">${e}</b>, וזה לא חשבון המנהל. התנתק והתחבר עם חשבון המנהל.`,
+      adminLoginH: 'כניסת מנהל', adminLoginP: 'התחבר עם חשבון ה־Google של המנהל.',
+      addH: 'הוספת מארח', addBtn: 'הוסף', nameOpt: 'שם (לא חובה)', already: 'המייל הזה כבר ברשימה.',
+      tReq: 'בקשות', tHosts: 'מארחים', tRooms: 'שולחנות', admH: 'ניהול',
+      noReq: 'אין בקשות ממתינות.', noHosts: 'עוד אין מארחים מאושרים.', noRooms: 'אין שולחנות פתוחים.',
+      approve: 'אשר', reject: 'דחה', del: 'מחק', revoke: 'הסר', closeRoom: 'סגור שולחן',
+      rejectedList: 'בקשות שנדחו', approveAnyway: 'אשר בכל זאת',
+      revokeQ: n => `להסיר את ${n} מרשימת המאושרים?`, revokeP: 'הוא לא יוכל לפתוח שולחנות חדשים. שולחנות שכבר פתח ימשיכו לעבוד.',
+      closeQ: c => `לסגור את שולחן ${c}?`, closeP: 'כל השחקנים יקבלו הודעה שהשולחן נסגר, והמשחק יימחק.',
+      cleanOld: n => `מחק שולחנות ישנים מיממה (${n})`, cleanQ: n => `למחוק ${n} שולחנות שנפתחו לפני יותר מיממה?`, yes: 'כן',
+      host: 'מארח', opened: 'נפתח', ph: { lobby: 'ממתינים לשחקנים', over: 'המשחק הסתיים', hand: n => `יד ${n}` },
+      online: 'מחובר', offline: 'מנותק', back: 'חזרה', err: m => 'שגיאה: ' + m,
+    },
+    en: {
+      hostH: 'Open a table', hostP: 'Only hosts approved by the game admin can open tables. Sign in with your Google account so we can check whether you are on the list.',
+      google: 'Sign in with Google', loginFail: m => 'Sign-in failed: ' + m,
+      emailLbl: 'Email address', badEmail: 'That email address is not valid.',
+      reqH: "You can't open tables yet", reqP: e => `The account <b dir="ltr">${e}</b> isn't on the approved hosts list. You can send a request to the game admin; once approved, you can open tables. Meanwhile you can join other people's tables.`,
+      nameLbl: 'Name', noteLbl: 'Message to the admin (optional)', sendReq: 'Send request', needName: 'Enter a name.',
+      pendingH: 'Request sent', pendingP: "Your request is waiting for the admin's approval. You can keep this page open: as soon as it's approved, a button to open a table will appear here. Meanwhile you can join other people's tables.",
+      rejectedH: 'Request declined', rejectedP: "The game admin didn't approve the request. You can still join other people's tables from a link.", reqAgain: 'Send request again',
+      approvedH: 'Request approved! 🎉', approvedP: 'You can now open tables.', approvedYou: 'Your permission to open tables is active.',
+      signedAs: e => `Signed in as <bdi dir="ltr">${e}</bdi>`, stAdmin: 'admin', stHost: 'approved host', stNone: 'not allowed to open tables',
+      signOut: 'Sign out', adminBtn: 'Admin',
+      notAdminH: 'No admin access', notAdminP: e => `You're signed in as <b dir="ltr">${e}</b>, which isn't the admin account. Sign out and sign in with the admin account.`,
+      adminLoginH: 'Admin sign-in', adminLoginP: "Sign in with the admin's Google account.",
+      addH: 'Add a host', addBtn: 'Add', nameOpt: 'Name (optional)', already: 'That email is already on the list.',
+      tReq: 'Requests', tHosts: 'Hosts', tRooms: 'Tables', admH: 'Admin',
+      noReq: 'No pending requests.', noHosts: 'No approved hosts yet.', noRooms: 'No open tables.',
+      approve: 'Approve', reject: 'Decline', del: 'Delete', revoke: 'Remove', closeRoom: 'Close table',
+      rejectedList: 'Declined requests', approveAnyway: 'Approve anyway',
+      revokeQ: n => `Remove ${n} from the approved list?`, revokeP: "They won't be able to open new tables. Tables they already opened keep working.",
+      closeQ: c => `Close table ${c}?`, closeP: 'All players will be told the table was closed, and the game will be deleted.',
+      cleanOld: n => `Delete tables older than a day (${n})`, cleanQ: n => `Delete ${n} tables opened more than a day ago?`, yes: 'Yes',
+      host: 'Host', opened: 'Opened', ph: { lobby: 'Waiting for players', over: 'Game over', hand: n => `Hand ${n}` },
+      online: 'online', offline: 'offline', back: 'Back', err: m => 'Error: ' + m,
+    },
+  };
+  const h = (k, ...a) => { const v = H2[I18N.lang][k]; return typeof v === 'function' ? v(...a) : v; };
+  const params = new URLSearchParams(location.search);
+  let adminMode = params.has('admin');
+  let authUser = null, hostOK = false, hostWatch = null, reqWatch = null, bootMsg = '', afterAuth = null;
+  const isEmailUser = () => !!authUser && !authUser.isAnonymous && !!authUser.email;
+  const isAdmin = () => isEmailUser() && authUser.email.toLowerCase() === ADMIN_EMAIL;
+  const canHost = () => isAdmin() || hostOK;
+  const emailKey = e => String(e || '').toLowerCase().replace(/\./g, ',');
+  const fmtTime = d => (d ? new Date(d).toLocaleString(I18N.locale(), { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+
+  async function startAuth() {
+    const auth = firebase.auth();
+    let intent = '';
+    try { intent = sessionStorage.getItem('hearts-intent') || ''; sessionStorage.removeItem('hearts-intent'); } catch (e) {}
+    try { await auth.getRedirectResult(); } catch (e) { bootMsg = h('loginFail', e.message); intent = ''; }
+    if (intent === 'host') afterAuth = continueHost;
+    auth.onAuthStateChanged(u => {
+      if (!u) { auth.signInAnonymously().catch(e => lobbyError(t('authFail', e.message))); return; }
+      authUser = u;
+      if (code) return; // already sitting at a table: keep this identity
+      uid = u.uid;
+      watchHost();
+      const act = afterAuth; afterAuth = null;
+      if (act && isEmailUser()) act();
+      else if (adminMode) adminScreen();
+      else { lobby(bootMsg); bootMsg = ''; }
+    });
+  }
+  async function googleSignIn(admin, errEl) {
+    const auth = firebase.auth();
+    const prov = new firebase.auth.GoogleAuthProvider();
+    prov.setCustomParameters({ prompt: 'select_account' });
+    auth.languageCode = I18N.lang;
+    afterAuth = admin ? null : continueHost;
+    try { await auth.signInWithPopup(prov); }
+    catch (e) {
+      if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') {
+        try { sessionStorage.setItem('hearts-intent', admin ? 'admin' : 'host'); } catch (x) {}
+        return auth.signInWithRedirect(prov);
+      }
+      afterAuth = null;
+      if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request' && errEl) errEl.textContent = h('loginFail', e.message);
+    }
+  }
+  function watchHost() {
+    if (hostWatch) hostWatch.off();
+    hostWatch = null; hostOK = false;
+    if (!isEmailUser()) return;
+    hostWatch = db.ref('hosts/' + emailKey(authUser.email));
+    hostWatch.on('value', s => {
+      const was = hostOK; hostOK = s.exists();
+      updateHostStatus();
+      if (hostOK && !was && UI.currentModal() === 'hostReq') {
+        UI.modal('hostReq', `<h2>${h('approvedH')}</h2><p>${h('approvedP')}</p>`,
+          [{ label: t('createRoom'), onClick: () => { lobby(); go('create'); } }, { label: h('back'), ghost: true, onClick: () => lobby() }]);
+      }
+    }, () => {});
+  }
+  function hostStatusHTML() {
+    if (!isEmailUser()) return '';
+    return `${h('signedAs', UI.esc(authUser.email))} · ${h(isAdmin() ? 'stAdmin' : hostOK ? 'stHost' : 'stNone')}`;
+  }
+  function updateHostStatus() { const e = document.getElementById('hoststat'); if (e) e.innerHTML = hostStatusHTML(); }
+  function signOut() {
+    if (hostWatch) hostWatch.off(); if (reqWatch) reqWatch.off(); adminOff();
+    hostWatch = reqWatch = null; hostOK = false; adminMode = false;
+    history.replaceState(null, '', location.pathname);
+    firebase.auth().signOut();
+  }
+  async function continueHost() {
+    let ok = isAdmin();
+    if (!ok) { try { ok = (await db.ref('hosts/' + emailKey(authUser.email)).get()).exists(); } catch (e) {} }
+    if (!savedName() && authUser.displayName) { try { localStorage.setItem('hearts-name', authUser.displayName.slice(0, 14)); } catch (e) {} }
+    if (ok) { hostOK = true; lobby(); go('create'); } else hostAccess(savedName());
+  }
+  async function hostAccess(name) {
+    if (!isEmailUser()) return googleStep(false);
+    let r = null;
+    try { r = (await db.ref('requests/' + uid).get()).val(); } catch (e) {}
+    if (r && r.status === 'rejected') return rejectedScreen();
+    if (r) return pendingScreen();
+    requestForm(name);
+  }
+  function googleStep(admin) {
+    const sheet = UI.modal('hostReq', `<h2>${h(admin ? 'adminLoginH' : 'hostH')}</h2><p>${h(admin ? 'adminLoginP' : 'hostP')}</p><div class="err" id="err2"></div>`,
+      [{ label: h('google'), onClick: () => googleSignIn(admin, sheet.querySelector('#err2')) },
+       { label: h('back'), ghost: true, onClick: () => { adminMode = false; history.replaceState(null, '', location.pathname); lobby(); } }]);
+  }
+  function requestForm(name) {
+    const sheet = UI.modal('hostReq', `<h2>${h('reqH')}</h2><p>${h('reqP', UI.esc(authUser.email))}</p>
+      <div class="field"><label for="rn">${h('nameLbl')}</label><input id="rn" maxlength="30" value="${UI.esc(name || savedName() || authUser.displayName || '')}"></div>
+      <div class="field"><label for="rt">${h('noteLbl')}</label><input id="rt" maxlength="120"></div>
+      <div class="err" id="err2"></div>`,
+      [{ label: h('sendReq'), onClick: async () => {
+        const n = sheet.querySelector('#rn').value.trim(), note = sheet.querySelector('#rt').value.trim();
+        if (!n) { sheet.querySelector('#err2').textContent = h('needName'); return; }
+        try {
+          await db.ref('requests/' + uid).set({ name: n, email: authUser.email, note, t: TS(), status: 'pending', lang: I18N.lang });
+          pendingScreen();
+        } catch (e) { sheet.querySelector('#err2').textContent = h('err', e.message); }
+      } },
+      { label: h('signOut'), ghost: true, onClick: signOut },
+      { label: h('back'), ghost: true, onClick: () => lobby() }]);
+  }
+  function pendingScreen() {
+    UI.modal('hostReq', `<h2>${h('pendingH')}</h2><p>${h('pendingP')}</p>`, [{ label: h('back'), ghost: true, onClick: () => lobby() }]);
+    if (reqWatch) reqWatch.off();
+    reqWatch = db.ref('requests/' + uid);
+    reqWatch.on('value', s => { const v = s.val(); if (v && v.status === 'rejected' && UI.currentModal() === 'hostReq') rejectedScreen(); }, () => {});
+  }
+  function rejectedScreen() {
+    UI.modal('hostReq', `<h2>${h('rejectedH')}</h2><p>${h('rejectedP')}</p>`,
+      [{ label: h('reqAgain'), onClick: () => requestForm(savedName()) }, { label: h('back'), ghost: true, onClick: () => lobby() }]);
+  }
+
+  /* admin screen */
+  const adm = { tab: 'req', reqs: {}, hosts: {}, rooms: {}, refs: [], err: '', raf: 0 };
+  function adminOff() { adm.refs.forEach(r => r.off()); adm.refs = []; }
+  function adminScreen() {
+    if (!isAdmin()) {
+      if (isEmailUser()) return UI.modal('hostReq', `<h2>${h('notAdminH')}</h2><p>${h('notAdminP', UI.esc(authUser.email))}</p>`,
+        [{ label: h('signOut'), onClick: signOut }, { label: h('back'), ghost: true, onClick: () => { adminMode = false; history.replaceState(null, '', location.pathname); lobby(); } }]);
+      return googleStep(true);
+    }
+    adminMode = true;
+    if (!adm.refs.length) {
+      const on = (path, key) => {
+        const r = db.ref(path);
+        r.on('value', s => { adm[key] = s.val() || {}; adm.err = ''; queueAdmin(); }, e => { adm.err = e.message; queueAdmin(); });
+        adm.refs.push(r);
+      };
+      on('requests', 'reqs'); on('hosts', 'hosts'); on('rooms', 'rooms');
+    }
+    renderAdmin();
+  }
+  function queueAdmin() {
+    if (adm.raf) return;
+    adm.raf = requestAnimationFrame(() => { adm.raf = 0; if (UI.currentModal() === 'admin') renderAdmin(); });
+  }
+  function confirmAdmin(q, p, fn) {
+    UI.modal('admConfirm', `<h2>${q}</h2>${p ? `<p>${p}</p>` : ''}`,
+      [{ label: h('yes'), onClick: async () => { try { await fn(); } catch (e) { adm.err = e.message; } renderAdmin(); } }, { label: t('cancel'), ghost: true, onClick: renderAdmin }]);
+  }
+  function renderAdmin() {
+    const old = document.querySelector('.scrim .sheet');
+    const keep = UI.currentModal() === 'admin' && old ? old.scrollTop : 0;
+    const reqs = Object.entries(adm.reqs).sort((a, b) => (a[1].t || 0) - (b[1].t || 0));
+    const pending = reqs.filter(([, r]) => r.status !== 'rejected'), rejected = reqs.filter(([, r]) => r.status === 'rejected');
+    const hosts = Object.entries(adm.hosts).sort((a, b) => (b[1].approvedAt || 0) - (a[1].approvedAt || 0));
+    const rooms = Object.entries(adm.rooms).filter(([, r]) => r && r.meta).sort((a, b) => (b[1].meta.created || 0) - (a[1].meta.created || 0));
+    const dayAgo = Date.now() - 864e5;
+    const old24 = rooms.filter(([, r]) => (r.meta.created || 0) < dayAgo);
+    const tab = (k, label, n) => `<button class="ibtn adm-tab${adm.tab === k ? ' on' : ''}" data-tab="${k}">${label}${n ? ` <span class="adm-n">${n}</span>` : ''}</button>`;
+    const btn = (act, id, label, ghost) => `<button class="btn${ghost ? ' ghost' : ''} adm-b" data-act="${act}" data-id="${UI.esc(id)}">${label}</button>`;
+    let body = '';
+    if (adm.tab === 'req') {
+      body = pending.length ? pending.map(([id, r]) => `<div class="adm-card"><b>${UI.esc(r.name || '?')}</b><div class="adm-sub" dir="ltr">${UI.esc(r.email || '')}</div>
+          ${r.note ? `<div class="adm-note">${UI.esc(r.note)}</div>` : ''}<div class="adm-sub">${fmtTime(r.t)}</div>
+          <div class="adm-row">${btn('approve', id, h('approve'))}${btn('reject', id, h('reject'), true)}</div></div>`).join('') : `<p>${h('noReq')}</p>`;
+      if (rejected.length) body += `<h3>${h('rejectedList')}</h3>` + rejected.map(([id, r]) => `<div class="adm-card dim"><b>${UI.esc(r.name || '?')}</b><div class="adm-sub" dir="ltr">${UI.esc(r.email || '')}</div>
+          <div class="adm-row">${btn('approve', id, h('approveAnyway'), true)}${btn('delreq', id, h('del'), true)}</div></div>`).join('');
+    } else if (adm.tab === 'hosts') {
+      body = `<div class="adm-card"><b>${h('addH')}</b>
+          <div class="field"><input id="addEm" type="email" dir="ltr" placeholder="${h('emailLbl')}" autocomplete="off"></div>
+          <div class="field"><input id="addNm" maxlength="30" placeholder="${h('nameOpt')}"></div>
+          <div class="err" id="addErr"></div><div class="adm-row">${btn('add', '', h('addBtn'))}</div></div>` + (hosts.length ? hosts.map(([id, r]) => `<div class="adm-card"><b>${UI.esc(r.name || '?')}</b><div class="adm-sub" dir="ltr">${UI.esc(r.email || '')}</div>
+          <div class="adm-sub">${fmtTime(r.approvedAt)}</div><div class="adm-row">${btn('revoke', id, h('revoke'), true)}</div></div>`).join('') : `<p>${h('noHosts')}</p>`);
+    } else {
+      body = (old24.length ? `<div class="adm-row">${btn('clean', '', h('cleanOld', old24.length), true)}</div>` : '') +
+        (rooms.length ? rooms.map(([c, r]) => {
+          const ps = arr4(r.players, null), st = r.state || {};
+          const phase = st.phase === 'gameOver' ? h('ph').over : !st.phase || st.phase === 'lobby' ? h('ph').lobby : h('ph').hand((st.handNum || 0) + 1);
+          const seats = ps.map(p => !p ? `<span class="adm-seat empty">—</span>` :
+            `<span class="adm-seat"><i class="dot ${p.bot || p.online !== false ? 'on' : ''}"></i>${p.bot ? '🤖 ' : ''}${UI.esc(I18N.mapName(p.name || '?'))}</span>`).join('');
+          const sc = st.scores ? ` · ${arr4(st.scores, 0).join(' / ')}` : '';
+          return `<div class="adm-card"><b dir="ltr">${UI.esc(c)}</b> · ${UI.esc(phase)}${sc}
+            <div class="adm-sub">${h('host')}: ${UI.esc(r.meta.hostName || (ps[0] && ps[0].name) || '?')}${r.meta.hostEmail ? ` <bdi dir="ltr">(${UI.esc(r.meta.hostEmail)})</bdi>` : ''} · ${h('opened')} ${fmtTime(r.meta.created)}</div>
+            <div class="adm-seats">${seats}</div><div class="adm-row">${btn('close', c, h('closeRoom'), true)}</div></div>`;
+        }).join('') : `<p>${h('noRooms')}</p>`);
+    }
+    const sheet = UI.modal('admin', `<h2>${h('admH')}</h2><p class="adm-sub">${hostStatusHTML()}</p>
+      <div class="adm-tabs">${tab('req', h('tReq'), pending.length)}${tab('hosts', h('tHosts'), hosts.length)}${tab('rooms', h('tRooms'), rooms.length)}</div>
+      ${adm.err ? `<div class="err">${UI.esc(h('err', adm.err))}</div>` : ''}<div class="adm-body">${body}</div>`,
+      [{ label: h('back'), onClick: () => { adminOff(); adminMode = false; history.replaceState(null, '', location.pathname); lobby(); } },
+       { label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { switchLang(); renderAdmin(); } },
+       { label: h('signOut'), ghost: true, onClick: signOut }]);
+    sheet.scrollTop = keep;
+    sheet.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { adm.tab = b.dataset.tab; renderAdmin(); });
+    sheet.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
+      const id = b.dataset.id, act = b.dataset.act;
+      try {
+        if (act === 'approve') {
+          const r = adm.reqs[id] || {};
+          await db.ref().update({ ['hosts/' + emailKey(r.email)]: { name: r.name || '', email: (r.email || '').toLowerCase(), approvedAt: TS() }, ['requests/' + id]: null });
+        } else if (act === 'add') {
+          const em = sheet.querySelector('#addEm').value.trim().toLowerCase(), nm = sheet.querySelector('#addNm').value.trim();
+          const err = sheet.querySelector('#addErr');
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { err.textContent = h('badEmail'); return; }
+          if (adm.hosts[emailKey(em)]) { err.textContent = h('already'); return; }
+          await db.ref('hosts/' + emailKey(em)).set({ name: nm, email: em, approvedAt: TS() });
+        } else if (act === 'reject') await db.ref('requests/' + id + '/status').set('rejected');
+        else if (act === 'delreq') await db.ref('requests/' + id).remove();
+        else if (act === 'revoke') return confirmAdmin(h('revokeQ', UI.esc((adm.hosts[id] || {}).name || (adm.hosts[id] || {}).email || '')), h('revokeP'), () => db.ref('hosts/' + id).remove());
+        else if (act === 'close') return confirmAdmin(h('closeQ', UI.esc(id)), h('closeP'), () => db.ref('rooms/' + id).remove());
+        else if (act === 'clean') return confirmAdmin(h('cleanQ', old24.length), '', () => db.ref('rooms').update(Object.fromEntries(old24.map(([c]) => [c, null]))));
+      } catch (e) { adm.err = e.message; renderAdmin(); }
+    });
   }
 
   /* ---------- in room ---------- */
@@ -1308,6 +1584,7 @@ const Common = (() => {
       [{ label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { UI.closeModal(); switchLang(); redraw(); } },
        { label: t('rulesBtn'), ghost: true, onClick: () => UI.modal('rules', `<h2>${t('rulesH')}</h2>` + t('rules'), [{ label: t('close'), close: true }]) },
        ...(code ? [{ label: t('share'), ghost: true, onClick: () => share(location.origin + location.pathname + '?room=' + code) }] : []),
+       ...(isAdmin() ? [{ label: '🛠 ' + h('adminBtn'), ghost: true, onClick: () => { UI.closeModal(); if (code) window.open(location.pathname + '?admin=1', '_blank'); else adminScreen(); } }] : []),
        { label: t('close'), close: true }]);
     sheet.querySelectorAll('#emo button').forEach(b => b.onclick = () => {
       room && room.child('react/' + mySeat).set({ e: b.textContent, t: Date.now() }); UI.closeModal();
