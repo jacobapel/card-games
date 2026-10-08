@@ -579,7 +579,7 @@ if (typeof module !== 'undefined') module.exports = Bot;
 
 /* ===== Languages ===== */
 const I18N = (() => {
-  const NAME_PAIRS = [['אני', 'Me'], ['נועה', 'Emma'], ['דוד', 'David'], ['מיכל', 'Michelle'], ['יוסי', 'Joseph'], ['מחשב', 'Computer']];
+  const NAME_PAIRS = [['אני', 'Me'], ['נועה', 'Emma'], ['דוד', 'David'], ['מיכל', 'Michelle'], ['יוסי', 'Joseph'], ['רובוט', 'Robot'], ['מחשב', 'Computer']];
   const D = {
     he: {
       title: 'לבבות', titleOnline: 'לבבות ברשת', btnScores: 'ניקוד', btnLast: 'לקיחה', menu: 'תפריט', langBtn: 'English',
@@ -611,7 +611,7 @@ const I18N = (() => {
       claimedMoonYou: '✋ היד נסגרה מוקדם, כי היה ברור שכל הנקודות שנשארו הולכות אליך.',
       claimedMoonOther: n => `✋ היד נסגרה מוקדם, כי היה ברור שכל הנקודות שנשארו הולכות ל${n}.`,
       colPlayer: 'שחקן', colThis: 'ביד הזו', nextHand: d => `היד הבאה: ${d}.`,
-      computer: 'מחשב', handN: n => `יד ${n}`, gotCards: n => `קיבלת 3 קלפים מ${n}, הם מורמים ביד שלך`, gotCardsShort: 'קיבלת 3 קלפים, הם מורמים',
+      computer: 'רובוט', handN: n => `יד ${n}`, gotCards: n => `קיבלת 3 קלפים מ${n}, הם מורמים ביד שלך`, gotCardsShort: 'קיבלת 3 קלפים, הם מורמים',
       passBtn: n => `העבר (${n}/3)`, cont: 'המשך', ok: 'אישור',
       allTakenH: 'כל הנקודות כבר נלקחו', allTakenP: 'בקלפים שנשארו אין לבבות ואין Q♠, כך שהניקוד של היד לא ישתנה.',
       finishHand: 'סיים את היד', keepPlaying: 'המשך לשחק', savedStats: 'המשחק נשמר בסטטיסטיקה.',
@@ -637,13 +637,13 @@ const I18N = (() => {
       noRoom: c => `לא נמצא שולחן עם הקוד ${c}.`, started: 'המשחק בשולחן הזה כבר התחיל. בקשו מהמארח שולחן חדש.', full: 'השולחן מלא.',
       goneH: 'השולחן נסגר', goneP: 'השולחן הזה כבר לא קיים.', toNewRoom: 'לשולחן חדש', kickedH: 'המקום שלך נתפס', kickedP: 'המארח פינה את המקום שלך בשולחן.',
       roomHand: (c, n) => `שולחן ${c}  יד ${n}`, hostDecides: 'כל הנקודות כבר נלקחו. המארח מחליט אם לסיים את היד.',
-      host: 'מארח', hostGone: 'המארח התנתק. המשחק ממשיך כשיחזור.', offlineDot: ' · מנותק', waitingPlayer: 'ממתין לשחקן…', remove: 'הסר', addBot: 'הוסף מחשב',
+      host: 'מארח', hostGone: 'המארח התנתק. המשחק ממשיך כשיחזור.', offlineDot: ' · מנותק', waitingPlayer: 'ממתין לשחקן…', remove: 'הסר', addBot: 'הוסף רובוט',
       seatN: n => `מקום ${n}`, roomN: c => `שולחן ${c}`, waitP: 'שלחו לחברים את הקישור או את הקוד. הסדר בשולחן הוא עם כיוון השעון לפי מספר המקום.',
-      allHere: 'כולם כאן. אפשר להתחיל.', fillBots: 'אפשר למלא מקומות פנויים בשחקני מחשב.', waitHost: 'ממתינים שהמארח יתחיל את המשחק.',
+      allHere: 'כולם כאן. אפשר להתחיל.', fillBots: 'אפשר למלא מקומות פנויים ברובוטים.', waitHost: 'ממתינים שהמארח יתחיל את המשחק.',
       share: 'שתף קישור', startGame: 'התחל משחק', shareText: 'בוא/י לשחק איתי לבבות', copyLink: 'העתק את הקישור:',
       readyList: l => `מוכנים: ${l}`, nobodyYet: 'עדיין אף אחד', waitOthers: 'ממתין לאחרים…', readyBtn: 'מוכן ליד הבאה',
       restart: 'משחק חדש באותו שולחן', hostCanRestart: 'המארח יכול לפתוח משחק חדש.', sendReaction: 'שלחו תגובה לשולחן:',
-      offlineToBot: 'שחקן התנתק? אפשר להעביר את המקום שלו למחשב:', toBot: n => `${n} ← מחשב`, codeIs: 'קוד השולחן:',
+      offlineToBot: 'שחקן התנתק? אפשר להעביר את המקום שלו לרובוט:', toBot: n => `${n} ← רובוט`, codeIs: 'קוד השולחן:',
     },
     en: {
       title: 'Hearts', titleOnline: 'Hearts Online', btnScores: 'Scores', btnLast: 'Last', menu: 'Menu', langBtn: 'עברית',
@@ -675,7 +675,7 @@ const I18N = (() => {
       claimedMoonYou: '✋ The hand ended early because all remaining points were sure to go to you.',
       claimedMoonOther: n => `✋ The hand ended early because all remaining points were sure to go to ${n}.`,
       colPlayer: 'Player', colThis: 'This hand', nextHand: d => `Next hand: ${d === 'no passing' ? d : 'pass ' + d}.`,
-      computer: 'Computer', handN: n => `Hand ${n}`, gotCards: n => `You got 3 cards from ${n}. They're raised in your hand`, gotCardsShort: 'Got 3 cards, raised',
+      computer: 'Robot', handN: n => `Hand ${n}`, gotCards: n => `You got 3 cards from ${n}. They're raised in your hand`, gotCardsShort: 'Got 3 cards, raised',
       passBtn: n => `Pass (${n}/3)`, cont: 'Continue', ok: 'OK',
       allTakenH: 'All points have been taken', allTakenP: "None of the remaining cards are hearts or the Q♠, so this hand's score won't change.",
       finishHand: 'End the hand', keepPlaying: 'Keep playing', savedStats: 'This game was saved to your statistics.',
@@ -700,13 +700,13 @@ const I18N = (() => {
       noRoom: c => `No table found with code ${c}.`, started: 'The game at this table has already started. Ask the host for a new table.', full: 'The table is full.',
       goneH: 'Table closed', goneP: 'This table no longer exists.', toNewRoom: 'New table', kickedH: 'Your seat was taken', kickedP: 'The host freed your seat at the table.',
       roomHand: (c, n) => `Table ${c}  Hand ${n}`, hostDecides: 'All points have been taken. The host is deciding whether to end the hand.',
-      host: 'Host', hostGone: 'The host disconnected. The game continues when they return.', offlineDot: ' · offline', waitingPlayer: 'Waiting for a player…', remove: 'Remove', addBot: 'Add computer',
+      host: 'Host', hostGone: 'The host disconnected. The game continues when they return.', offlineDot: ' · offline', waitingPlayer: 'Waiting for a player…', remove: 'Remove', addBot: 'Add robot',
       seatN: n => `Seat ${n}`, roomN: c => `Table ${c}`, waitP: 'Send your friends the link or the code. Seating goes clockwise by seat number.',
-      allHere: "Everyone's here. You can start.", fillBots: 'You can fill empty seats with computer players.', waitHost: 'Waiting for the host to start the game.',
+      allHere: "Everyone's here. You can start.", fillBots: 'You can fill empty seats with robots.', waitHost: 'Waiting for the host to start the game.',
       share: 'Share link', startGame: 'Start game', shareText: 'Come play Hearts with me', copyLink: 'Copy the link:',
       readyList: l => `Ready: ${l}`, nobodyYet: 'nobody yet', waitOthers: 'Waiting for others…', readyBtn: 'Ready for next hand',
       restart: 'New game at this table', hostCanRestart: 'The host can start a new game.', sendReaction: 'Send a reaction to the table:',
-      offlineToBot: 'Someone disconnected? You can hand their seat to the computer:', toBot: n => `${n} → computer`, codeIs: 'Table code:',
+      offlineToBot: 'Someone disconnected? You can hand their seat to a robot:', toBot: n => `${n} → robot`, codeIs: 'Table code:',
     },
   };
   let lang;
@@ -1221,7 +1221,7 @@ const Common = (() => {
   function playersView(N, st) {
     return [0, 1, 2, 3].map(s => {
       const p = players[s];
-      let note = p && p.bot ? t('computer') : '';
+      let note = p && p.bot ? `${t('computer')} ${[0, 1, 2, 3].filter(x => x <= s && isBot(x)).length}` : '';
       if (meta && p && p.uid === meta.host && !p.bot) note = t('host');
       if (s === mySeat && st.mine) note = st.mine;
       return { name: N[s], bot: isBot(s), online: p ? p.online !== false : false, note };
