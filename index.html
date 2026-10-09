@@ -215,6 +215,12 @@ tr.clk:hover td{background:rgba(201,162,74,.12)}
 .rmeld .card{--sz:34px;width:34px;height:48px;flex:none}
 .rmeld .card+.card{margin-left:-16px}
 .rmeld.can{border-color:var(--brass);box-shadow:0 0 14px rgba(236,212,154,.55);cursor:pointer;animation:rglow 1.4s ease-in-out infinite}
+.rmeld.edit{position:relative;align-items:center;border:2px dashed rgba(236,212,154,.3);padding:8px 4px 4px}
+.rmeld.bad{border:2px solid #e2554f;box-shadow:0 0 10px rgba(226,85,79,.45)}
+.rmeld.edit .card{cursor:pointer;transition:transform .12s}
+.rmeld .card.sel{transform:translateY(-8px);box-shadow:0 0 0 2px var(--brass),0 4px 10px rgba(0,0,0,.4);z-index:2}
+.rmeld .card.fromhand::after{content:"";position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--brass)}
+.rplus{flex:none;margin-left:8px;width:30px;height:30px;border-radius:50%;border:0;background:var(--brass);color:#2b0a11;font-weight:800;font-size:1.2rem;line-height:1;box-shadow:0 2px 0 #8e6f2a;cursor:pointer}
 .rmeld.fresh{animation:rfresh .6s ease-out}
 @keyframes rfresh{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
 .rhand{position:relative;height:calc(var(--rcw)*1.42 + 18px);direction:ltr;flex:none}
@@ -1182,11 +1188,13 @@ const Rummy = (() => {
     g.drewFrom = null; g.takenCard = null;
     g.reshuffles = 0;
     g.last = null;                 // last notable action, for display
+    g.review = null;               // { seat, prev: melds before rearranging, ack: [4] }
     g.ready = [0, 1, 2, 3].map(i => !act(g)[i]);
     g.winner = null; g.handDelta = null; g.winners = null;
     g.phase = 'play';
   }
-  const mine = (g, seat) => g.phase === 'play' && g.turn === seat;
+  // no moves while players are reviewing a rearranged table
+  const mine = (g, seat) => g.phase === 'play' && g.turn === seat && !g.review;
   function draw(g, seat, from) {
     if (!mine(g, seat) || g.step !== 'draw') return false;
     let c;
@@ -1229,6 +1237,34 @@ const Rummy = (() => {
     if (!g.hands[seat].length) endHand(g, seat);
     return true;
   }
+  // Rearrange the whole table: newMelds is an array of card arrays. Every table card must stay on the
+  // table, at least one card must come from the hand, and every group must be a valid meld.
+  function rearrange(g, seat, newMelds, autoAck = [false, false, false, false]) {
+    if (!mine(g, seat) || g.step !== 'play' || !Array.isArray(newMelds) || !newMelds.length) return false;
+    const groups = newMelds.map(m => (Array.isArray(m) ? m.slice() : []));
+    const table = g.melds.flatMap(m => m.cards), all = groups.flat();
+    if (new Set(all).size !== all.length) return false;
+    if (!table.every(c => all.includes(c))) return false;
+    const extra = all.filter(c => !table.includes(c));
+    if (!extra.length || !extra.every(c => g.hands[seat].includes(c))) return false;
+    const melds = groups.map(asMeld);
+    if (melds.some(m => !m)) return false;
+    const prev = g.melds.map(m => ({ id: m.id, type: m.type, owner: m.owner, cards: m.cards.slice() }));
+    const ownerOf = c => { const m = g.melds.find(x => x.cards.includes(c)); return m ? m.owner : seat; };
+    g.melds = melds.map((m, i) => ({ id: ++g.meldSeq, type: m.type, cards: m.cards, owner: ownerOf(groups[i][0]) }));
+    g.hands[seat] = g.hands[seat].filter(c => !extra.includes(c));
+    g.last = { seat, kind: 'rearrange', cards: extra };
+    if (!g.hands[seat].length) { endHand(g, seat); return true; }
+    const ack = [0, 1, 2, 3].map(i => i === seat || !act(g)[i] || !!autoAck[i]);
+    g.review = ack.every(Boolean) ? null : { seat, prev, ack };
+    return true;
+  }
+  function ackReview(g, seat) {
+    if (!g.review) return false;
+    g.review.ack[seat] = true;
+    if (g.review.ack.every(Boolean)) g.review = null;
+    return true;
+  }
   function canDiscard(g, seat, card) {
     if (!mine(g, seat) || g.step !== 'play' || !g.hands[seat].includes(card)) return false;
     if (g.drewFrom === 'discard' && card === g.takenCard && g.hands[seat].length > 1) return false;
@@ -1245,7 +1281,7 @@ const Rummy = (() => {
   }
   const handValue = h => h.reduce((a, c) => a + pts(c), 0);
   function endHand(g, winner) {
-    g.winner = winner;
+    g.winner = winner; g.review = null;
     const delta = four(0);
     if (winner != null) {
       delta[winner] = [0, 1, 2, 3].filter(s => s !== winner).reduce((a, s) => a + handValue(g.hands[s]), 0);
@@ -1267,7 +1303,7 @@ const Rummy = (() => {
     if (g.ready.every(Boolean)) startHand(g);
     return true;
   }
-  return { SUITS, suit, rank, pts, sortHand, asSet, asRun, asMeld, newGame, startHand, draw, meld, layoff, canDiscard, discard,
+  return { SUITS, suit, rank, pts, sortHand, asSet, asRun, asMeld, newGame, startHand, draw, meld, layoff, rearrange, ackReview, canDiscard, discard,
     setReady, handValue };
 })();
 
@@ -1379,6 +1415,32 @@ const RBot = (() => {
   const names = () => players.map((p, i) => I18N.mapName(p ? p.name : (pub && pub.names && pub.names[i] ? pub.names[i] : t('emptySeat'))));
   const isBot = s => !!(players[s] && players[s].bot);
 
+  /* ---------- version check ---------- */
+  const APP_VER = 6;
+  function reloadFresh(v) {
+    try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
+    const q = new URLSearchParams();
+    const rc = code || params.get('room'); if (rc) q.set('room', rc);
+    try { if (code) sessionStorage.setItem('cg-rejoin', code); } catch (e) {}
+    if (adminMode) q.set('admin', '1');
+    q.set('v', Date.now());
+    toast(h('newVer'));
+    setTimeout(() => location.replace(location.pathname + '?' + q.toString()), 1200);
+  }
+  function checkLatest() {
+    if (!/^https?:/.test(location.protocol)) return;
+    fetch(location.pathname + '?vc=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(txt => {
+      const m = /const APP_VER = (\d+);/.exec(txt || '');
+      if (m && +m[1] > APP_VER) reloadFresh(+m[1]);
+    }).catch(() => {});
+  }
+  function checkRoomVer() {
+    const vs = [meta && meta.ver, ...players.map(p => p && !p.bot && p.ver)].map(v => +v || 0);
+    const top = Math.max(...vs);
+    if (top > APP_VER) return reloadFresh(top);
+    if (isHost() && (+(meta && meta.ver) || 0) < APP_VER) room.child('meta/ver').set(APP_VER).catch(() => {});
+  }
+
   /* ---------- boot ---------- */
   function boot() {
     UI.mount({ card: onCard, action: onAction, menu, scores: showScores, last: showLast });
@@ -1389,6 +1451,7 @@ const RBot = (() => {
     firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database();
     startAuth();
+    checkLatest();
   }
   function emptyView() {
     return { mySeat: 0, players: four({ name: '' }), hand: [], trick: [], phase: 'lobby', status: '' };
@@ -1415,6 +1478,8 @@ const RBot = (() => {
        ...(isAdmin() ? [{ label: '🛠 ' + h('adminBtn'), ghost: true, onClick: adminScreen }] : []),
        ...(isEmailUser() ? [{ label: h('signOut'), ghost: true, onClick: signOut }] : [])]);
     sheet.querySelector('#nm').focus();
+    let rj = ''; try { rj = sessionStorage.getItem('cg-rejoin') || ''; sessionStorage.removeItem('cg-rejoin'); } catch (e) {}
+    if (rj && rj === urlCode && savedName() && !err) go('join');
   }
   function lobbyError(msg) { const e = document.getElementById('err'); if (e) e.textContent = msg; else lobby(msg); }
   async function go(kind) {
@@ -1434,8 +1499,8 @@ const RBot = (() => {
       if (!(await db.ref('rooms/' + c + '/meta').get()).exists()) break;
     }
     code = c; room = db.ref('rooms/' + code);
-    await room.child('meta').set({ host: uid, created: TS(), hostName: name, hostEmail: (authUser && authUser.email) || '', game, opts });
-    await room.child('players/0').set({ uid, name, online: true });
+    await room.child('meta').set({ host: uid, created: TS(), hostName: name, hostEmail: (authUser && authUser.email) || '', game, opts, ver: APP_VER });
+    await room.child('players/0').set({ uid, name, online: true, ver: APP_VER });
     await room.child('state').set({ phase: 'lobby', game });
     mySeat = 0; enter();
   }
@@ -1451,7 +1516,7 @@ const RBot = (() => {
     if (st && st !== 'lobby') throw new Error(t('started'));
     for (let s = 0; s < 4; s++) {
       if (ps[s]) continue;
-      const res = await r.child('players/' + s).transaction(cur => (cur === null ? { uid, name, online: true } : undefined));
+      const res = await r.child('players/' + s).transaction(cur => (cur === null ? { uid, name, online: true, ver: APP_VER } : undefined));
       if (res.committed) { mySeat = s; return enter(); }
     }
     throw new Error(t('full'));
@@ -1461,7 +1526,7 @@ const RBot = (() => {
   const ADMIN_EMAIL = 'pspcom@gmail.com';
   const H2 = {
     he: {
-      leftLobby: n => `${n} עזב/ה את השולחן`, leftGame: n => `${n} עזב/ה את השולחן. רובוט ממשיך במקומו/ה.`,
+      newVer: 'יש גרסה חדשה – טוען מחדש…', leftLobby: n => `${n} עזב/ה את השולחן`, leftGame: n => `${n} עזב/ה את השולחן. רובוט ממשיך במקומו/ה.`,
       newHost: n => `${n} הוא/היא המארח/ת עכשיו`, youHost: 'אתה המארח עכשיו. המשחק ממשיך אצלך.',
       leave: 'עזוב שולחן', leaveQ: 'לעזוב את השולחן?', leaveBtn: 'כן, לעזוב',
       leaveLobby: 'המקום שלך בשולחן יתפנה.', leaveGame: 'המקום שלך יעבור לרובוט, והמשחק ימשיך בלעדיך.',
@@ -1490,6 +1555,7 @@ const RBot = (() => {
       online: 'מחובר', offline: 'מנותק', back: 'חזרה', err: m => 'שגיאה: ' + m,
     },
     en: {
+      newVer: 'A new version is available – reloading…',
       leftLobby: n => `${n} left the table`, leftGame: n => `${n} left the table. A robot is playing in their place.`,
       newHost: n => `${n} is now the host`, youHost: "You're now the host. The game continues on your device.",
       leave: 'Leave table', leaveQ: 'Leave the table?', leaveBtn: 'Yes, leave',
@@ -1733,6 +1799,7 @@ const RBot = (() => {
     UI.closeModal('lobby');
     history.replaceState(null, '', location.pathname + '?room=' + code);
     const onRef = room.child('players/' + mySeat + '/online');
+    room.child('players/' + mySeat + '/ver').set(APP_VER).catch(() => {});
     db.ref('.info/connected').on('value', s => { if (s.val()) { onRef.onDisconnect().set(false); onRef.set(true); } });
     room.child('meta').on('value', s => {
       const prevHost = meta && meta.host;
@@ -1741,7 +1808,7 @@ const RBot = (() => {
         if (meta.host === uid) toast(h('youHost'));
         else { const ns = players.findIndex(p => p && p.uid === meta.host); if (ns >= 0) toast(h('newHost', I18N.mapName(players[ns].name))); }
       }
-      hostSetup(); maybeRebuild(); redraw();
+      checkRoomVer(); hostSetup(); maybeRebuild(); redraw();
     });
     let playersSeen = false;
     room.child('players').on('value', s => {
@@ -1749,7 +1816,7 @@ const RBot = (() => {
       players = arr4(s.val(), null);
       if (playersSeen) seatChanges(prev, players);
       playersSeen = true;
-      afterPlayers(); redraw();
+      checkRoomVer(); afterPlayers(); redraw();
       if (isHost() && g) hostStep();
     });
     room.child('state').on('value', s => { pub = normalize(s.val()); onState(); });
@@ -2103,7 +2170,13 @@ const RBot = (() => {
       tapMeld: 'הקש על סדרה מוארת כדי להוסיף אליה את הקלפים שבחרת',
       takenNote: c => `את ${c} שלקחת מהערימה אי אפשר לזרוק בתור הזה`,
       gotFromStock: c => `משכת ${c} מהקופה. לחץ "המשך" כדי להכניס אותו ליד.`, gotFromDisc: c => `לקחת ${c} מהערימה. לחץ "המשך" כדי להכניס אותו ליד.`,
-      turnOf: n => `התור של ${n}`, meldBtn: 'הורד סדרה', discardBtn: 'זרוק', sortSuit: 'מיין לפי צורה', sortRank: 'מיין לפי מספר', clearSel: 'נקה בחירה',
+      turnOf: n => `התור של ${n}`, meldBtn: 'הורד סדרה', discardBtn: 'זרוק', sortSuit: 'מיין לפי צורה', sortRank: 'מיין לפי מספר', clearSel: 'שנה בחירה',
+      arrange: 'סדר את השולחן', newGroup: 'סדרה חדשה', toHand: 'החזר ליד', confirmArr: 'אשר סידור', cancelArr: 'בטל',
+      editHelp: 'בחר קלפים מהשולחן או מהיד, ואז הקש ➕ ליד סדרה או על "סדרה חדשה". סדרה במסגרת אדומה עדיין לא תקינה.',
+      needHand: 'כדי לאשר צריך להשתמש לפחות בקלף אחד מהיד.', editOk: 'הכול תקין. אפשר לאשר את הסידור.',
+      reviewOther: n => `${n} סידר/ה מחדש את השולחן. אפשר לראות את המצב הקודם, ואז ללחוץ "המשך".`,
+      reviewMine: 'סידרת מחדש את השולחן. השחקנים האחרים בודקים את השינוי.', reviewWait: l => `ממתינים ל: ${l}`,
+      showPrev: 'הצג מצב קודם', showNew: 'הצג מצב חדש', prevNote: 'מוצג המצב הקודם, לפני הסידור', lRearrange: n => `${n} סידר/ה מחדש את השולחן`,
       lDraw: n => `${n} משך/ה מהקופה`, lTake: (n, c) => `${n} לקח/ה ${c} מהערימה`, lMeld: n => `${n} הוריד/ה סדרה`,
       lLayoff: n => `${n} הוסיף/ה לסדרה`, lDiscard: (n, c) => `${n} זרק/ה ${c}`,
       outYou: 'יצאת! ניצחת ביד הזו 🎉', outOther: n => `${n} יצא/ה וניצח/ה ביד`, noWinner: 'הקופה נגמרה שוב ושוב, והיד הסתיימה בלי מנצח.',
@@ -2114,6 +2187,7 @@ const RBot = (() => {
         <li>בכל תור: מושכים קלף אחד, מהקופה או את הקלף העליון בערימה.</li>
         <li>אחר כך אפשר להוריד סדרות: 3–4 קלפים מאותו מספר, או רצף של 3 ומעלה באותה צורה. אס יכול להיות נמוך (A-2-3) או גבוה (Q-K-A), אבל לא באמצע (K-A-2).</li>
         <li>אפשר גם להוסיף קלפים לכל סדרה שעל השולחן, גם של שחקנים אחרים.</li>
+        <li>מותר לסדר מחדש את הסדרות שעל השולחן, לפצל אותן או להעביר קלפים ביניהן, בתנאי שמוסיפים לפחות קלף אחד מהיד, שאף קלף מהשולחן לא חוזר ליד, ושבסוף כל הסדרות תקינות. אחרי סידור כזה כל השחקנים יכולים לראות את המצב הקודם, והמשחק ממשיך כשכולם לוחצים "המשך".</li>
         <li>התור נגמר בזריקת קלף לערימה. את הקלף שלקחת מהערימה אי אפשר לזרוק באותו תור.</li>
         <li>מי שנפטר מכל הקלפים יוצא ומנצח ביד. הוא מקבל את סכום הקלפים שנשארו אצל האחרים: תמונות 10, אס 1, השאר לפי המספר.</li>
         <li>כשהקופה נגמרת, הערימה נטרפת ונהיית קופה חדשה. המשחק נגמר כשמישהו מגיע לניקוד היעד, והגבוה מנצח.</li></ul>
@@ -2131,7 +2205,13 @@ const RBot = (() => {
       tapMeld: 'Tap a highlighted meld to add your selected cards to it',
       takenNote: c => `You can't discard the ${c} you took this turn`,
       gotFromStock: c => `You drew ${c} from the stock. Press "Continue" to add it to your hand.`, gotFromDisc: c => `You took ${c} from the discard pile. Press "Continue" to add it to your hand.`,
-      turnOf: n => `${n}'s turn`, meldBtn: 'Lay down meld', discardBtn: 'Discard', sortSuit: 'Sort by suit', sortRank: 'Sort by rank', clearSel: 'Clear',
+      turnOf: n => `${n}'s turn`, meldBtn: 'Lay down meld', discardBtn: 'Discard', sortSuit: 'Sort by suit', sortRank: 'Sort by rank', clearSel: 'Change selection',
+      arrange: 'Rearrange table', newGroup: 'New meld', toHand: 'Back to hand', confirmArr: 'Confirm', cancelArr: 'Cancel',
+      editHelp: 'Select cards from the table or your hand, then tap ➕ next to a meld or "New meld". A red frame means the meld is not valid yet.',
+      needHand: 'To confirm you must use at least one card from your hand.', editOk: 'Everything is valid. You can confirm.',
+      reviewOther: n => `${n} rearranged the table. You can look at the previous layout, then press "Continue".`,
+      reviewMine: 'You rearranged the table. The other players are reviewing the change.', reviewWait: l => `Waiting for: ${l}`,
+      showPrev: 'Show previous', showNew: 'Show new', prevNote: 'Showing the table before the rearrangement', lRearrange: n => `${n} rearranged the table`,
       lDraw: n => `${n} drew from the stock`, lTake: (n, c) => `${n} took ${c} from the discard pile`, lMeld: n => `${n} laid down a meld`,
       lLayoff: n => `${n} added to a meld`, lDiscard: (n, c) => `${n} discarded ${c}`,
       outYou: 'You went out and won the hand! 🎉', outOther: n => `${n} went out and won the hand`, noWinner: 'The stock ran out again and again, so the hand ended with no winner.',
@@ -2142,6 +2222,7 @@ const RBot = (() => {
         <li>On your turn, draw one card: from the stock or the top of the discard pile.</li>
         <li>Then you may lay down melds: 3–4 cards of the same rank, or a run of 3 or more in one suit. An ace can be low (A-2-3) or high (Q-K-A), but not in the middle (K-A-2).</li>
         <li>You may also add cards to any meld on the table, including other players' melds.</li>
+        <li>You may rearrange the melds on the table, splitting them or moving cards between them, as long as you add at least one card from your hand, no table card goes back to a hand, and every meld is valid at the end. Afterwards everyone can look at the previous layout, and play continues once all players press "Continue".</li>
         <li>End your turn by discarding a card. You can't discard the card you took from the discard pile on the same turn.</li>
         <li>Whoever gets rid of all their cards goes out and wins the hand, scoring the value of everyone else's cards: face cards 10, ace 1, others their number.</li>
         <li>When the stock runs out, the discard pile is shuffled into a new stock. The game ends when someone reaches the target score; highest wins.</li></ul>
@@ -2152,7 +2233,7 @@ const RBot = (() => {
   const isRummy = () => (meta && meta.game === 'rummy') || (pub && pub.game === 'rummy');
   const cardName = c => `${Hearts.rankTxt(Rummy.rank(c))}${Hearts.SYM[Rummy.suit(c)]}`;
   let rSort = (() => { try { return localStorage.getItem('rummy-sort') || 'suit'; } catch (e) { return 'suit'; } })();
-  let rRevealAck = '';
+  let rRevealAck = '', rEdit = null, rShowPrev = false;
   let rSel = new Set(), rPrevHand = null, rNew = new Set(), rDom = null, rLastMeldIds = new Set(), rMeldsSeen = false;
 
   /* ---- choosing the game when opening a table ---- */
@@ -2193,6 +2274,8 @@ const RBot = (() => {
     st.left = v.left ? arr4(v.left, null).map(list) : null;
     st.turn = v.turn != null ? v.turn : -1;
     st.winner = v.winner != null ? v.winner : null;
+    st.review = v.review ? { seat: v.review.seat, ack: arr4(v.review.ack, false),
+      prev: list(v.review.prev).map(m => ({ id: m.id, type: m.type, owner: m.owner, cards: list(m.cards) })) } : null;
     return st;
   }
 
@@ -2268,12 +2351,17 @@ const RBot = (() => {
     const revealing = !!drawn && rRevealAck !== pub.handNum + ':' + drawn;
     if (revealing) rSel.clear();
     const selArr = [...rSel];
-    const playing = myTurn && pub.step === 'play' && !revealing;
+    const reviewing = pub.phase === 'play' && !!pub.review;
+    if (!reviewing) rShowPrev = false;
+    const playing = myTurn && pub.step === 'play' && !revealing && !reviewing;
+    if (rEdit && !playing) rEdit = null;
+    if (rEdit) { rRedrawEdit(); return rEndModal(N); }
     // melds
     const targets = playing && selArr.length ? new Set(pub.melds.filter(m => (m.type === 'set' ? Rummy.asSet : Rummy.asRun)(m.cards.concat(selArr))).map(m => m.id)) : new Set();
     const fresh = pub.melds.filter(m => !rLastMeldIds.has(m.id)).map(m => m.id);
     rLastMeldIds = new Set(pub.melds.map(m => m.id)); const wasSeen = rMeldsSeen; rMeldsSeen = true;
-    rDom.melds.innerHTML = pub.melds.length ? pub.melds.map(m => `<button class="rmeld${targets.has(m.id) ? ' can' : ''}${wasSeen && fresh.includes(m.id) ? ' fresh' : ''}" data-id="${m.id}" title="${UI.esc(N[m.owner])}">${m.cards.map(UI.cardHTML).join('')}</button>`).join('')
+    const shown = reviewing && rShowPrev ? pub.review.prev : pub.melds;
+    rDom.melds.innerHTML = shown.length ? shown.map(m => `<button class="rmeld${targets.has(m.id) ? ' can' : ''}${wasSeen && fresh.includes(m.id) ? ' fresh' : ''}" data-id="${m.id}" title="${UI.esc(N[m.owner])}">${m.cards.map(UI.cardHTML).join('')}</button>`).join('')
       : `<div class="rempty" dir="${I18N.dir}">${rt('noMelds')}</div>`;
     rDom.melds.querySelectorAll('.rmeld.can').forEach(b => b.onclick = () => { const ids = [...rSel]; rSel.clear(); sent = true; send({ type: 'layoff', cards: ids, meld: +b.dataset.id }); rRedraw(); });
     // hand cards
@@ -2290,7 +2378,12 @@ const RBot = (() => {
     rLayoutHand();
     // status
     let st = '';
-    if (pub.phase === 'play') {
+    if (reviewing) {
+      const R0 = pub.review;
+      st = (rShowPrev ? `<small>${rt('prevNote')}</small><br>` : '') + (R0.seat === mySeat ? rt('reviewMine') : rt('reviewOther', UI.esc(N[R0.seat])));
+      const wait = [0, 1, 2, 3].filter(s => pub.active[s] && !R0.ack[s]).map(s => UI.esc(N[s]));
+      if (wait.length) st += `<br><small>${rt('reviewWait', wait.join(', '))}</small>`;
+    } else if (pub.phase === 'play') {
       if (myTurn) st = pub.step === 'draw' ? rt('drawNow') : revealing ? rt(pub.drewFrom === 'discard' ? 'gotFromDisc' : 'gotFromStock', cardName(drawn)) : (targets.size ? rt('tapMeld') : rt('playNow'));
       else st = rt('turnOf', UI.esc(N[pub.turn]));
     }
@@ -2299,28 +2392,88 @@ const RBot = (() => {
     const L = pub.last;
     rDom.last.textContent = !L || pub.phase !== 'play' || L.seat === mySeat ? '' :
       L.kind === 'draw' ? rt('lDraw', N[L.seat]) : L.kind === 'take' ? rt('lTake', N[L.seat], cardName(L.card)) :
-      L.kind === 'meld' ? rt('lMeld', N[L.seat]) : L.kind === 'layoff' ? rt('lLayoff', N[L.seat]) : rt('lDiscard', N[L.seat], cardName(L.card));
+      L.kind === 'meld' ? rt('lMeld', N[L.seat]) : L.kind === 'layoff' ? rt('lLayoff', N[L.seat]) :
+      L.kind === 'rearrange' ? rt('lRearrange', N[L.seat]) : rt('lDiscard', N[L.seat], cardName(L.card));
     // actions
     const meldOk = playing && selArr.length >= 3 && !!Rummy.asMeld(selArr);
     const discOk = playing && selArr.length === 1 && !(pub.drewFrom === 'discard' && pub.takenCard === selArr[0] && hand.length > 1);
     const acts = [];
+    if (reviewing) {
+      acts.push(`<button class="btn ghost" data-a="prev">${rt(rShowPrev ? 'showNew' : 'showPrev')}</button>`);
+      if (!pub.review.ack[mySeat] && !sent) acts.push(`<button class="btn" data-a="rok">${t('cont')}</button>`);
+    }
     if (revealing) acts.push(`<button class="btn" data-a="cont">${t('cont')}</button>`);
     if (playing) {
       acts.push(`<button class="btn" data-a="meld"${meldOk ? '' : ' disabled'}>${rt('meldBtn')}</button>`);
       acts.push(`<button class="btn" data-a="disc"${discOk ? '' : ' disabled'}>${rt('discardBtn')}</button>`);
+      if (pub.melds.length) acts.push(`<button class="btn ghost" data-a="arr">${rt('arrange')}</button>`);
     }
     if (rSel.size) acts.push(`<button class="btn ghost" data-a="clear">${rt('clearSel')}</button>`);
-    if (!revealing) acts.push(`<button class="btn ghost" data-a="sort">${rt(rSort === 'suit' ? 'sortRank' : 'sortSuit')}</button>`);
+    if (!revealing && !reviewing) acts.push(`<button class="btn ghost" data-a="sort">${rt(rSort === 'suit' ? 'sortRank' : 'sortSuit')}</button>`);
     rDom.acts.innerHTML = acts.join('');
     rDom.acts.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
       const a = b.dataset.a;
       if (a === 'sort') { rSort = rSort === 'suit' ? 'rank' : 'suit'; try { localStorage.setItem('rummy-sort', rSort); } catch (e) {} return rRedraw(); }
       if (a === 'clear') { rSel.clear(); return rRedraw(); }
       if (a === 'cont' && drawn) { rRevealAck = pub.handNum + ':' + drawn; return rRedraw(); }
+      if (a === 'prev') { rShowPrev = !rShowPrev; return rRedraw(); }
+      if (a === 'rok') { sent = true; send({ type: 'reviewOk' }); return rRedraw(); }
+      if (a === 'arr') { rSel.clear(); rEdit = { groups: pub.melds.map(m => m.cards.slice()), hand: myHand.cards.slice(), orig: myHand.cards.slice(), sel: new Set() }; return rRedraw(); }
       if (a === 'meld' && meldOk) { rSel.clear(); sent = true; send({ type: 'meld', cards: selArr }); return rRedraw(); }
       if (a === 'disc' && discOk) { rSel.clear(); sent = true; send({ type: 'discard', card: selArr[0] }); return rRedraw(); }
     });
     rEndModal(N);
+  }
+  /* ---- rearranging the table (current player only) ---- */
+  const rGroupView = cards => { const m = Rummy.asMeld(cards); return m ? m.cards : Rummy.sortHand(cards, 'suit'); };
+  function rMove(target) {
+    const E = rEdit, cards = [...E.sel];
+    E.groups.forEach(gr => cards.forEach(c => { const k = gr.indexOf(c); if (k >= 0) gr.splice(k, 1); }));
+    E.hand = E.hand.filter(c => !cards.includes(c));
+    if (target) target.push(...cards); else E.groups.push(cards);
+    E.groups = E.groups.filter(gr => gr.length);
+    E.sel.clear(); rRedraw();
+  }
+  function rRedrawEdit() {
+    const E = rEdit;
+    const valid = E.groups.every(gr => Rummy.asMeld(gr));
+    const used = E.orig.filter(c => !E.hand.includes(c)).length;
+    const hasSel = E.sel.size > 0;
+    const backOk = hasSel && [...E.sel].every(c => E.orig.includes(c) && !E.hand.includes(c));
+    rDom.melds.innerHTML = E.groups.map((gr, i) => `<div class="rmeld edit${Rummy.asMeld(gr) ? '' : ' bad'}">${rGroupView(gr).map(UI.cardHTML).join('')}${hasSel ? `<button class="rplus" data-i="${i}" aria-label="+">+</button>` : ''}</div>`).join('');
+    rDom.melds.querySelectorAll('.rmeld.edit .card').forEach(el => {
+      const c = el.dataset.id;
+      el.classList.toggle('sel', E.sel.has(c));
+      el.classList.toggle('fromhand', E.orig.includes(c));
+      el.onclick = () => { if (E.sel.has(c)) E.sel.delete(c); else E.sel.add(c); rRedraw(); };
+    });
+    rDom.melds.querySelectorAll('.rplus').forEach(b => b.onclick = () => rMove(E.groups[+b.dataset.i]));
+    const hand = Rummy.sortHand(E.hand, rSort);
+    rDom.hand.innerHTML = hand.map(UI.cardHTML).join('');
+    rDom.hand.querySelectorAll('.card').forEach(el => {
+      const c = el.dataset.id;
+      el.classList.toggle('sel', E.sel.has(c));
+      el.onclick = () => { if (E.sel.has(c)) E.sel.delete(c); else E.sel.add(c); rRedraw(); };
+    });
+    rLayoutHand();
+    rDom.status.innerHTML = !valid ? rt('editHelp') : used ? rt('editOk') : rt('needHand');
+    rDom.last.textContent = '';
+    rDom.acts.innerHTML = [
+      `<button class="btn" data-a="new"${hasSel ? '' : ' disabled'}>${rt('newGroup')}</button>`,
+      `<button class="btn ghost" data-a="back"${backOk ? '' : ' disabled'}>${rt('toHand')}</button>`,
+      `<button class="btn" data-a="ok"${valid && used ? '' : ' disabled'}>${rt('confirmArr')}</button>`,
+      `<button class="btn ghost" data-a="cancel">${rt('cancelArr')}</button>`].join('');
+    rDom.acts.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
+      const a = b.dataset.a;
+      if (a === 'new' && hasSel) return rMove(null);
+      if (a === 'back' && backOk) {
+        const cards = [...E.sel];
+        E.groups.forEach(gr => cards.forEach(c => { const k = gr.indexOf(c); if (k >= 0) gr.splice(k, 1); }));
+        E.groups = E.groups.filter(gr => gr.length); E.hand.push(...cards); E.sel.clear(); return rRedraw();
+      }
+      if (a === 'ok' && valid && used) { const melds = E.groups.map(gr => Rummy.asMeld(gr).cards); rEdit = null; sent = true; send({ type: 'rearrange', melds }); return rRedraw(); }
+      if (a === 'cancel') { rEdit = null; return rRedraw(); }
+    });
   }
   function rDraw(from) {
     if (!pub || pub.phase !== 'play' || pub.turn !== mySeat || pub.step !== 'draw' || sent) return;
@@ -2378,17 +2531,20 @@ const RBot = (() => {
     else if (a.type === 'meld') ok = Rummy.meld(g, seat, list(a.cards));
     else if (a.type === 'layoff') ok = Rummy.layoff(g, seat, list(a.cards), +a.meld);
     else if (a.type === 'discard') ok = Rummy.discard(g, seat, a.card);
+    else if (a.type === 'rearrange') ok = Rummy.rearrange(g, seat, list(a.melds).map(list), players.map(p => !!(p && p.bot)));
+    else if (a.type === 'reviewOk') ok = Rummy.ackReview(g, seat);
     else if (a.type === 'ready') ok = Rummy.setReady(g, seat);
     if (ok) rHostStep(); else rHostPublish();
   }
   function rHostStep() {
     if (g.phase === 'handEnd') for (let s = 0; s < 4; s++) if (isBot(s) && !g.ready[s]) Rummy.setReady(g, s);
+    if (g.review) for (let s = 0; s < 4; s++) if (isBot(s) && g.review && !g.review.ack[s]) Rummy.ackReview(g, s);
     rHostPublish();
     clearTimeout(hostTimer);
-    if (g.phase === 'play' && isBot(g.turn)) {
+    if (g.phase === 'play' && !g.review && isBot(g.turn)) {
       hostTimer = setTimeout(() => {
         const s = g.turn;
-        if (g.phase !== 'play' || !isBot(s)) return;
+        if (g.phase !== 'play' || g.review || !isBot(s)) return;
         RBot.apply(g, s, RBot.nextAction(g, s));
         rHostStep();
       }, g.step === 'draw' ? 900 : 1100);
@@ -2401,7 +2557,7 @@ const RBot = (() => {
       game: 'rummy', active: g.active, phase: g.phase, handNum: g.handNum, dealer: g.dealer, names: g.names, target: g.target, nCards: g.nCards, seq: g.seq,
       scores: g.scores, history: g.history, turn: g.turn, step: g.step, discard: g.discard, melds: g.melds, meldSeq: g.meldSeq,
       counts: g.hands.map(x => x.length), stockCount: g.stock.length, drewFrom: g.drewFrom, takenCard: g.takenCard, reshuffles: g.reshuffles,
-      last: g.last, ready: g.ready, winner: g.winner, handDelta: g.handDelta, winners: g.winners, left: over ? g.hands : null,
+      last: g.last, ready: g.ready, winner: g.winner, handDelta: g.handDelta, winners: g.winners, left: over ? g.hands : null, review: g.review,
     };
     const up = { state: JSON.parse(JSON.stringify(st)) };
     for (let s = 0; s < 4; s++) up['hands/' + s] = { cards: g.hands[s] };
@@ -2416,7 +2572,7 @@ const RBot = (() => {
       dealer: st.dealer, phase: st.phase, seq: st.seq || 0, meldSeq: st.meldSeq || Math.max(0, ...st.melds.map(m => m.id)),
       hands: hs.map(x => list(x && x.cards)), stock, discard: st.discard, melds: st.melds, turn: st.turn, step: st.step,
       drewFrom: st.drewFrom || null, takenCard: st.takenCard || null, reshuffles: st.reshuffles || 0, last: st.last || null,
-      ready: st.ready, winner: st.winner, handDelta: st.handDelta, winners: st.winners.length ? st.winners : null };
+      ready: st.ready, winner: st.winner, handDelta: st.handDelta, winners: st.winners.length ? st.winners : null, review: st.review };
     rHostStep();
     const pending = (await room.child('actions').get()).val() || {};
     Object.keys(pending).forEach(k => hostAction(+k, pending[k], room.child('actions/' + k)));
