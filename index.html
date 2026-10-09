@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#3d0f18">
-<title>לבבות ברשת</title>
+<title>משחקי קלפים</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Frank+Ruhl+Libre:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -168,6 +168,69 @@ table.sc .best{color:var(--card-red)}
 tr.clk{cursor:pointer}
 tr.clk:hover td{background:rgba(201,162,74,.12)}
 .sheet .row .btn{flex:1 1 auto}
+/* rummy */
+.rtable{position:relative;margin:0 6px 6px;border-radius:28px;overflow:hidden;color:#f6ead6;min-height:0;display:flex;flex-direction:column;gap:6px;padding:10px 8px 10px;
+  background:radial-gradient(ellipse 80% 60% at 50% 42%,var(--felt) 0%,var(--felt2) 100%);
+  box-shadow:inset 0 0 0 3px var(--rim),inset 0 0 0 5px rgba(201,162,74,.55),inset 0 0 60px rgba(0,0,0,.45);
+  --rcw:max(40px,min(clamp(46px,13vw,80px),calc((100dvh - 540px) / 1.42)));--pw:clamp(44px,11vw,66px)}
+.rtable.idle>*{visibility:hidden}
+.ropps{display:flex;gap:6px}
+.rpl{position:relative;display:flex;align-items:center;gap:7px;padding:5px 9px 5px 6px;border-radius:14px;background:rgba(20,4,8,.45);border:1px solid rgba(236,212,154,.18);transition:box-shadow .25s,border-color .25s}
+.rpl.turn{border-color:var(--brass);box-shadow:0 0 0 2px rgba(201,162,74,.35),0 0 18px rgba(236,212,154,.35)}
+.rpl.off{opacity:.65}
+.rpl .av{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.8rem;background:var(--brass);color:#2b0a11;flex:none}
+.rpl .who{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.rpl .who b{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rpl .who small{font-size:.7rem;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rpl .rinfo{display:flex;align-items:center;gap:8px;margin-inline-start:auto}
+.rpl .score{font-family:var(--serif);font-weight:700;color:var(--brass-soft);font-size:1.05rem}
+.rcnt{display:inline-flex;align-items:center;gap:3px;font-weight:700;font-size:.85rem}
+.rcnt .back{display:inline-block;width:11px;height:15px;border-radius:2px;outline-width:1px;outline-offset:-2px}
+.ropp{flex:1;min-width:0;flex-direction:column;align-items:center;text-align:center;padding:6px 4px;gap:3px}
+.ropp .who{align-items:center}.ropp .rinfo{margin:0}
+.rmine{align-self:center}
+.rmid{display:flex;justify-content:center;align-items:flex-end;gap:22px;padding-top:2px}
+.rpile{position:relative;width:var(--pw);height:calc(var(--pw)*1.42);padding:0;border:0;background:none;border-radius:8px;color:inherit}
+.rpile .back,.rpile .rtop .card{position:absolute;inset:0;width:100%;height:100%;--sz:var(--pw)}
+.rpile .rtop{position:absolute;inset:0}
+.rpile:not(.rstock) .rtop:empty{border:2px dashed rgba(236,212,154,.35);border-radius:8px}
+.rbadge{position:absolute;top:-8px;inset-inline-end:-10px;min-width:22px;height:22px;padding:0 5px;border-radius:999px;background:#2b0a11;border:1px solid var(--brass);color:var(--brass-soft);font-size:.75rem;font-weight:700;display:grid;place-items:center;z-index:3}
+.rbadge:empty{display:none}
+.rlbl{position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:.72rem;opacity:.8;white-space:nowrap}
+.rpile.can{cursor:pointer;animation:rglow 1.4s ease-in-out infinite;border-radius:9px}
+@keyframes rglow{0%,100%{box-shadow:0 0 0 2px rgba(201,162,74,.5),0 0 8px rgba(236,212,154,.3)}50%{box-shadow:0 0 0 3px var(--brass),0 0 20px rgba(236,212,154,.65)}}
+.rstatus{text-align:center;font-weight:600;font-size:.93rem;line-height:1.35;padding:14px 6px 0;min-height:2.4em;text-wrap:balance}
+.rstatus small{font-weight:500;opacity:.85}
+.rlast{text-align:center;font-size:.78rem;opacity:.8;min-height:1.1em}
+.rmelds{flex:1;min-height:56px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:6px 10px;align-content:flex-start;justify-content:center;padding:6px;border-radius:14px;background:rgba(0,0,0,.18)}
+.rempty{align-self:center;opacity:.6;font-size:.85rem;padding:8px}
+.rmeld{display:flex;padding:3px 3px 3px 3px;border-radius:9px;border:2px solid transparent;background:none;cursor:default}
+.rmeld .card{--sz:34px;width:34px;height:48px;flex:none}
+.rmeld .card+.card{margin-left:-16px}
+.rmeld.can{border-color:var(--brass);box-shadow:0 0 14px rgba(236,212,154,.55);cursor:pointer;animation:rglow 1.4s ease-in-out infinite}
+.rmeld.fresh{animation:rfresh .6s ease-out}
+@keyframes rfresh{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
+.rhand{position:relative;height:calc(var(--rcw)*1.42 + 18px);direction:ltr;flex:none}
+.rhand .card{--sz:var(--rcw);position:absolute;bottom:0;width:var(--rcw);height:calc(var(--rcw)*1.42);transition:transform .15s ease,left .2s ease;cursor:pointer;touch-action:manipulation}
+.rhand .card.sel{transform:translateY(-16px);box-shadow:0 0 0 2.5px var(--brass),0 8px 16px rgba(0,0,0,.45)}
+.rhand .card.new::after{content:"";position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--brass);box-shadow:0 0 0 2px var(--card)}
+.rhand .card.locked{box-shadow:0 0 0 2px rgba(236,212,154,.45) inset,0 3px 8px rgba(0,0,0,.35)}
+.ractions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;flex:none}
+.ractions .btn{padding:8px 16px;font-size:.92rem}
+.ractions .btn.ghost{color:#f6ead6;border-color:rgba(236,212,154,.5)}
+.rleft{display:flex;direction:ltr;justify-content:center}
+.rleft .card{--sz:26px;width:26px;height:37px;flex:none}
+.rleft .card+.card{margin-left:-12px}
+.gline{font-weight:700;color:var(--ink)!important}
+.gpick{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:8px 0;cursor:pointer}
+.gpick:has(input:checked){border-color:var(--brass);box-shadow:0 0 0 2px rgba(201,162,74,.35)}
+.gpick input{margin-top:4px;accent-color:#8e6f2a}
+.gpick span{display:flex;flex-direction:column;gap:2px}
+.gpick small{color:var(--muted);font-size:.85rem}
+.ropts{display:flex;gap:10px}.ropts .field{flex:1}
+.field select{font:inherit;font-size:1rem;padding:9px 10px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+@media (prefers-reduced-motion:reduce){.rpile.can,.rmeld.can{animation:none}}
+
 .adm-sub{font-size:.85rem;color:var(--muted);margin:2px 0}
 .adm-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 6px}
 .adm-tab.on{background:var(--brass);color:#2b0a11;border-color:var(--brass)}
@@ -206,7 +269,7 @@ tr.clk:hover td{background:rgba(201,162,74,.12)}
 </style>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="לבבות ברשת">
+<meta name="apple-mobile-web-app-title" content="משחקי קלפים">
 <link rel="icon" type="image/png" sizes="192x192" href="data:image/png;base64,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">
 <link rel="apple-touch-icon" href="data:image/png;base64,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">
 <link id="pwaManifest" rel="manifest">
@@ -214,7 +277,7 @@ tr.clk:hover td{background:rgba(201,162,74,.12)}
 (function () {
   var he; try { he = localStorage.getItem('hearts-lang'); } catch (e) {}
   he = he ? he === 'he' : /^he|^iw/i.test(navigator.language || '');
-  var name = he ? 'לבבות ברשת' : 'Hearts Online';
+  var name = he ? 'משחקי קלפים' : 'Card Games';
   var m = {
     name: name, short_name: name, start_url: location.origin + location.pathname,
     display: 'standalone', background_color: '#3d0f18', theme_color: '#3d0f18',
@@ -598,7 +661,7 @@ const I18N = (() => {
   const NAME_PAIRS = [['אני', 'Me'], ['נועה', 'Emma'], ['דוד', 'David'], ['מיכל', 'Michelle'], ['יוסי', 'Joseph'], ['רובוט', 'Robot'], ['מחשב', 'Computer']];
   const D = {
     he: {
-      title: 'לבבות', titleOnline: 'לבבות ברשת', btnScores: 'ניקוד', btnLast: 'לקיחה', menu: 'תפריט', langBtn: 'English',
+      title: 'לבבות', titleOnline: 'משחקי קלפים', btnScores: 'ניקוד', btnLast: 'לקיחה', menu: 'תפריט', langBtn: 'English',
       emptySeat: 'מקום פנוי', tagPassed: 'העביר ✓', tagOffline: 'מנותק', colHand: 'יד', colTotal: 'סה״כ', me: ' (אני)',
       noTrick: 'עוד לא נלקחה אף לקיחה ביד הזו.', tookTrick: n => `${n} לקח/ה את הלקיחה.`,
       suits: { C: 'תלתן', D: 'יהלום', S: 'עלה', H: 'לב' },
@@ -662,7 +725,7 @@ const I18N = (() => {
       offlineToBot: 'שחקן התנתק? אפשר להעביר את המקום שלו לרובוט:', toBot: n => `${n} ← רובוט`, codeIs: 'קוד השולחן:',
     },
     en: {
-      title: 'Hearts', titleOnline: 'Hearts Online', btnScores: 'Scores', btnLast: 'Last', menu: 'Menu', langBtn: 'עברית',
+      title: 'Hearts', titleOnline: 'Card Games', btnScores: 'Scores', btnLast: 'Last', menu: 'Menu', langBtn: 'עברית',
       emptySeat: 'Empty seat', tagPassed: 'Passed ✓', tagOffline: 'Offline', colHand: 'Hand', colTotal: 'Total', me: ' (me)',
       noTrick: 'No trick has been taken yet this hand.', tookTrick: n => `${n} took the trick.`,
       suits: { C: 'clubs', D: 'diamonds', S: 'spades', H: 'hearts' },
@@ -1042,6 +1105,253 @@ const Common = (() => {
   return { statusFor, handEndHTML };
 })();
 
+/* ===== Classic Rummy engine (pure logic) ===== */
+const Rummy = (() => {
+  const SUITS = ['C', 'D', 'S', 'H'];
+  const suit = c => c[0];
+  const rank = c => +c.slice(1);            // 2..14, ace = 14
+  const pts = c => { const r = rank(c); return r === 14 ? 1 : r > 10 ? 10 : r; };
+  const sortHand = (h, by = 'suit') => h.slice().sort(by === 'rank'
+    ? (a, b) => (rank(a) % 14) - (rank(b) % 14) || SUITS.indexOf(suit(a)) - SUITS.indexOf(suit(b))
+    : (a, b) => SUITS.indexOf(suit(a)) - SUITS.indexOf(suit(b)) || rank(a) - rank(b));
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      let j;
+      if (typeof crypto !== 'undefined' && crypto.getRandomValues) { const u = new Uint32Array(1); crypto.getRandomValues(u); j = u[0] % (i + 1); }
+      else j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  const deck = () => { const d = []; for (const s of SUITS) for (let r = 2; r <= 14; r++) d.push(s + r); return d; };
+
+  // ---- meld validation: returns the meld in display order, or null ----
+  function asSet(cards) {
+    if (cards.length < 3 || cards.length > 4) return null;
+    const r = rank(cards[0]);
+    if (!cards.every(c => rank(c) === r)) return null;
+    if (new Set(cards.map(suit)).size !== cards.length) return null;
+    return cards.slice().sort((a, b) => SUITS.indexOf(suit(a)) - SUITS.indexOf(suit(b)));
+  }
+  function asRun(cards) {
+    if (cards.length < 3) return null;
+    const s = suit(cards[0]);
+    if (!cards.every(c => suit(c) === s)) return null;
+    for (const aceLow of [false, true]) {
+      const v = c => (aceLow && rank(c) === 14 ? 1 : rank(c));
+      const sorted = cards.slice().sort((a, b) => v(a) - v(b));
+      let ok = true;
+      for (let i = 1; i < sorted.length; i++) if (v(sorted[i]) !== v(sorted[i - 1]) + 1) { ok = false; break; }
+      if (ok) return sorted;
+    }
+    return null;
+  }
+  function asMeld(cards) {
+    const s = asSet(cards); if (s) return { type: 'set', cards: s };
+    const r = asRun(cards); if (r) return { type: 'run', cards: r };
+    return null;
+  }
+
+  // ---- game ----
+  const four = v => [v, v, v, v];
+  // active: which of the 4 seats take part (empty seats are skipped)
+  function newGame(names, opts = {}, active = [true, true, true, true]) {
+    return { game: 'rummy', names: names.slice(), active: active.map(Boolean), nCards: Math.min(10, Math.max(7, +opts.cards || 7)),
+      target: +opts.target || 100, scores: four(0), history: [], handNum: -1, dealer: -1, phase: 'lobby', seq: 0, meldSeq: 0 };
+  }
+  const act = g => g.active || [true, true, true, true];
+  const nextSeat = (g, s) => { for (let i = 1; i <= 4; i++) { const n = (s + i + 4) % 4; if (act(g)[n]) return n; } return s; };
+  function startHand(g) {
+    g.handNum++;
+    g.dealer = nextSeat(g, g.dealer);
+    const d = shuffle(deck());
+    g.hands = [0, 1, 2, 3].map(i => (act(g)[i] ? sortHand(d.splice(0, g.nCards)) : []));
+    g.discard = [d.pop()];
+    g.stock = d;
+    g.melds = [];
+    g.turn = nextSeat(g, g.dealer);
+    g.step = 'draw';
+    g.drewFrom = null; g.takenCard = null;
+    g.reshuffles = 0;
+    g.last = null;                 // last notable action, for display
+    g.ready = [0, 1, 2, 3].map(i => !act(g)[i]);
+    g.winner = null; g.handDelta = null; g.winners = null;
+    g.phase = 'play';
+  }
+  const mine = (g, seat) => g.phase === 'play' && g.turn === seat;
+  function draw(g, seat, from) {
+    if (!mine(g, seat) || g.step !== 'draw') return false;
+    let c;
+    if (from === 'discard') {
+      if (!g.discard.length) return false;
+      c = g.discard.pop(); g.drewFrom = 'discard'; g.takenCard = c;
+    } else {
+      if (!g.stock.length) {
+        if (g.discard.length <= 1 || g.reshuffles >= 6) { endHand(g, null); return true; }
+        const top = g.discard.pop();
+        g.stock = shuffle(g.discard); g.discard = [top]; g.reshuffles++;
+      }
+      c = g.stock.pop(); g.drewFrom = 'stock'; g.takenCard = null;
+    }
+    g.hands[seat].push(c);
+    g.step = 'play';
+    g.last = { seat, kind: from === 'discard' ? 'take' : 'draw', card: from === 'discard' ? c : null };
+    return true;
+  }
+  const hasAll = (hand, cards) => cards.every(c => hand.includes(c)) && new Set(cards).size === cards.length;
+  function meld(g, seat, cards) {
+    if (!mine(g, seat) || g.step !== 'play' || !Array.isArray(cards) || !hasAll(g.hands[seat], cards)) return false;
+    // must keep a card to discard unless the meld empties the hand
+    const m = asMeld(cards); if (!m) return false;
+    g.hands[seat] = g.hands[seat].filter(c => !cards.includes(c));
+    g.melds.push({ id: ++g.meldSeq, type: m.type, cards: m.cards, owner: seat });
+    g.last = { seat, kind: 'meld', cards: m.cards };
+    if (!g.hands[seat].length) endHand(g, seat);
+    return true;
+  }
+  function layoff(g, seat, cards, meldId) {
+    if (!mine(g, seat) || g.step !== 'play' || !Array.isArray(cards) || !cards.length || !hasAll(g.hands[seat], cards)) return false;
+    const m = g.melds.find(x => x.id === meldId); if (!m) return false;
+    const all = m.cards.concat(cards);
+    const res = m.type === 'set' ? asSet(all) : asRun(all);
+    if (!res) return false;
+    m.cards = res;
+    g.hands[seat] = g.hands[seat].filter(c => !cards.includes(c));
+    g.last = { seat, kind: 'layoff', cards: cards.slice(), meld: meldId };
+    if (!g.hands[seat].length) endHand(g, seat);
+    return true;
+  }
+  function canDiscard(g, seat, card) {
+    if (!mine(g, seat) || g.step !== 'play' || !g.hands[seat].includes(card)) return false;
+    if (g.drewFrom === 'discard' && card === g.takenCard && g.hands[seat].length > 1) return false;
+    return true;
+  }
+  function discard(g, seat, card) {
+    if (!canDiscard(g, seat, card)) return false;
+    g.hands[seat] = g.hands[seat].filter(c => c !== card);
+    g.discard.push(card);
+    g.last = { seat, kind: 'discard', card };
+    if (!g.hands[seat].length) return endHand(g, seat), true;
+    g.turn = nextSeat(g, seat); g.step = 'draw'; g.drewFrom = null; g.takenCard = null;
+    return true;
+  }
+  const handValue = h => h.reduce((a, c) => a + pts(c), 0);
+  function endHand(g, winner) {
+    g.winner = winner;
+    const delta = four(0);
+    if (winner != null) {
+      delta[winner] = [0, 1, 2, 3].filter(s => s !== winner).reduce((a, s) => a + handValue(g.hands[s]), 0);
+    }
+    g.handDelta = delta;
+    g.scores = g.scores.map((s, i) => s + delta[i]);
+    g.history.push(delta);
+    g.ready = [0, 1, 2, 3].map(i => !act(g)[i]);
+    g.step = null;
+    if (Math.max(...g.scores) >= g.target) {
+      const mx = Math.max(...g.scores);
+      g.winners = [0, 1, 2, 3].filter(i => act(g)[i] && g.scores[i] === mx);
+      g.phase = 'gameOver';
+    } else g.phase = 'handEnd';
+  }
+  function setReady(g, seat) {
+    if (g.phase !== 'handEnd') return false;
+    g.ready[seat] = true;
+    if (g.ready.every(Boolean)) startHand(g);
+    return true;
+  }
+  return { SUITS, suit, rank, pts, sortHand, asSet, asRun, asMeld, newGame, startHand, draw, meld, layoff, canDiscard, discard,
+    setReady, handValue };
+})();
+
+/* ===== Rummy computer player ===== */
+const RBot = (() => {
+  const R = (typeof Rummy !== 'undefined' ? Rummy : require('./rummy.js'));
+  const { suit, rank, pts } = R;
+  // all candidate melds inside a hand
+  function candidates(hand) {
+    const out = [];
+    const byRank = {};
+    hand.forEach(c => (byRank[rank(c)] = byRank[rank(c)] || []).push(c));
+    for (const k in byRank) {
+      const g = byRank[k];
+      if (g.length >= 3) {
+        if (g.length === 4) out.push(g.slice());
+        for (let i = 0; i < g.length; i++) if (g.length === 4) out.push(g.filter((_, j) => j !== i)); else out.push(g.slice());
+      }
+    }
+    for (const s of R.SUITS) {
+      const cs = hand.filter(c => suit(c) === s);
+      for (const aceLow of [false, true]) {
+        const v = c => (aceLow && rank(c) === 14 ? 1 : rank(c));
+        const sorted = cs.slice().sort((a, b) => v(a) - v(b));
+        for (let i = 0; i < sorted.length; i++) {
+          const run = [sorted[i]];
+          for (let j = i + 1; j < sorted.length && v(sorted[j]) === v(run[run.length - 1]) + 1; j++) {
+            run.push(sorted[j]);
+            if (run.length >= 3) out.push(run.slice());
+          }
+        }
+      }
+    }
+    const seen = new Set();
+    return out.filter(m => { const k = m.slice().sort().join(); if (seen.has(k)) return false; seen.add(k); return true; });
+  }
+  // best set of disjoint melds (max points melded, then most cards)
+  function bestMelds(hand) {
+    const cands = candidates(hand);
+    let best = { melds: [], val: 0, n: 0 };
+    (function rec(i, used, chosen, val, n) {
+      if (val > best.val || (val === best.val && n > best.n)) best = { melds: chosen.slice(), val, n };
+      for (let k = i; k < cands.length; k++) {
+        const m = cands[k];
+        if (m.some(c => used.has(c))) continue;
+        m.forEach(c => used.add(c)); chosen.push(m);
+        rec(k + 1, used, chosen, val + m.reduce((a, c) => a + pts(c), 0), n + m.length);
+        chosen.pop(); m.forEach(c => used.delete(c));
+      }
+    })(0, new Set(), [], 0, 0);
+    return best;
+  }
+  const fitsTable = (g, c) => g.melds.find(m => (m.type === 'set' ? R.asSet : R.asRun)(m.cards.concat([c])));
+  function usefulness(hand, c) {
+    let u = 0;
+    for (const o of hand) {
+      if (o === c) continue;
+      if (rank(o) === rank(c)) u += 2;
+      if (suit(o) === suit(c)) { const d = Math.abs(rank(o) - rank(c)); if (d === 1) u += 2; else if (d === 2) u += 1; }
+    }
+    return u;
+  }
+  function nextAction(g, seat) {
+    const hand = g.hands[seat];
+    if (g.step === 'draw') {
+      const top = g.discard[g.discard.length - 1];
+      if (top) {
+        const gain = bestMelds(hand.concat([top])).val - bestMelds(hand).val;
+        if (gain > 0 || fitsTable(g, top)) return { type: 'draw', from: 'discard' };
+      }
+      return { type: 'draw', from: 'stock' };
+    }
+    const bm = bestMelds(hand);
+    if (bm.melds.length) return { type: 'meld', cards: bm.melds[0] };
+    for (const c of hand) {
+      const m = fitsTable(g, c);
+      if (m) return { type: 'layoff', cards: [c], meld: m.id };
+    }
+    const opts = hand.filter(c => R.canDiscard(g, seat, c));
+    opts.sort((a, b) => (pts(b) - 3 * usefulness(hand, b)) - (pts(a) - 3 * usefulness(hand, a)) || rank(b) - rank(a));
+    return { type: 'discard', card: opts[0] };
+  }
+  function apply(g, seat, a) {
+    if (a.type === 'draw') return R.draw(g, seat, a.from);
+    if (a.type === 'meld') return R.meld(g, seat, a.cards);
+    if (a.type === 'layoff') return R.layoff(g, seat, a.cards, a.meld);
+    if (a.type === 'discard') return R.discard(g, seat, a.card);
+    return false;
+  }
+  return { nextAction, apply, bestMelds, candidates };
+})();
+
 /* ===== Version 2: online table, each player on their own device ===== */
 (() => {
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1063,8 +1373,9 @@ const Common = (() => {
 
   /* ---------- boot ---------- */
   function boot() {
-    UI.mount({ card: onCard, action: onAction, table: onTable, menu, scores: showScores, last: showLast });
+    UI.mount({ card: onCard, action: onAction, menu, scores: showScores, last: showLast });
     UI.applyLang('titleOnline');
+    setHeader();
     UI.render(emptyView());
     if (typeof firebase === 'undefined' || !FIREBASE_CONFIG.apiKey) return setupNeeded();
     firebase.initializeApp(FIREBASE_CONFIG);
@@ -1104,20 +1415,20 @@ const Common = (() => {
     if (!name) return lobbyError(t('needYourName'));
     try { localStorage.setItem('hearts-name', name); } catch (e) {}
     try {
-      if (kind === 'create') { if (!canHost()) return hostAccess(name); await createRoom(name); }
+      if (kind === 'create') { if (!canHost()) return hostAccess(name); return chooseGame(name); }
       else { if (c.length !== 4) return lobbyError(t('codeLen')); await joinRoom(c, name); }
     } catch (e) { lobbyError(e.message || String(e)); }
   }
-  async function createRoom(name) {
+  async function createRoom(name, game = 'hearts', opts = null) {
     let c;
     for (let i = 0; i < 6; i++) {
       c = Array.from({ length: 4 }, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join('');
       if (!(await db.ref('rooms/' + c + '/meta').get()).exists()) break;
     }
     code = c; room = db.ref('rooms/' + code);
-    await room.child('meta').set({ host: uid, created: TS(), hostName: name, hostEmail: (authUser && authUser.email) || '' });
+    await room.child('meta').set({ host: uid, created: TS(), hostName: name, hostEmail: (authUser && authUser.email) || '', game, opts });
     await room.child('players/0').set({ uid, name, online: true });
-    await room.child('state').set({ phase: 'lobby' });
+    await room.child('state').set({ phase: 'lobby', game });
     mySeat = 0; enter();
   }
   async function joinRoom(c, name) {
@@ -1365,7 +1676,7 @@ const Common = (() => {
           const seats = ps.map(p => !p ? `<span class="adm-seat empty">—</span>` :
             `<span class="adm-seat"><i class="dot ${p.bot || p.online !== false ? 'on' : ''}"></i>${p.bot ? '🤖 ' : ''}${UI.esc(I18N.mapName(p.name || '?'))}</span>`).join('');
           const sc = st.scores ? ` · ${arr4(st.scores, 0).join(' / ')}` : '';
-          return `<div class="adm-card"><b dir="ltr">${UI.esc(c)}</b> · ${UI.esc(phase)}${sc}
+          return `<div class="adm-card">${r.meta.game === 'rummy' ? '🃏' : '♥'} <b dir="ltr">${UI.esc(c)}</b> · ${UI.esc(phase)}${sc}
             <div class="adm-sub">${h('host')}: ${UI.esc(r.meta.hostName || (ps[0] && ps[0].name) || '?')}${r.meta.hostEmail ? ` <bdi dir="ltr">(${UI.esc(r.meta.hostEmail)})</bdi>` : ''} · ${h('opened')} ${fmtTime(r.meta.created)}</div>
             <div class="adm-seats">${seats}</div><div class="adm-row">${btn('close', c, h('closeRoom'), true)}</div></div>`;
         }).join('') : `<p>${h('noRooms')}</p>`);
@@ -1420,7 +1731,7 @@ const Common = (() => {
     room.child('react').on('child_added', s => react(+s.key, s.val()));
   }
   function gone() { UI.modal('gone', `<h2>${t('goneH')}</h2><p>${t('goneP')}</p>`, [{ label: t('toNewRoom'), onClick: () => { location.href = location.pathname; } }]); }
-  function react(seat, v) { if (v && Date.now() - v.t < 6000) UI.bubble(seat, v.e); }
+  function react(seat, v) { if (v && Date.now() - v.t < 6000) (isRummy() ? rBubble : UI.bubble)(seat, v.e); }
   function afterPlayers() {
     const lost = mySeat >= 0 && (players[mySeat] ? players[mySeat].uid !== uid : pub && pub.phase === 'lobby');
     if (lost && !isHost()) {
@@ -1428,6 +1739,7 @@ const Common = (() => {
     }
   }
   function normalize(v) {
+    if ((v && v.game === 'rummy') || (meta && meta.game === 'rummy')) return rnorm(v);
     if (!v) return { phase: 'lobby' };
     const st = Object.assign({}, v);
     st.scores = arr4(v.scores, 0); st.taken = arr4(v.taken, 0); st.counts = arr4(v.counts, 0);
@@ -1461,6 +1773,8 @@ const Common = (() => {
   /* ---------- drawing ---------- */
   function redraw() {
     if (!pub || mySeat < 0) return;
+    if (isRummy()) return rRedraw();
+    setHeader();
     const N = names();
     if (pub.phase === 'lobby') { UI.render(Object.assign(emptyView(), { mySeat, players: playersView(N, {}) })); return waitingRoom(N); }
     if (UI.currentModal() === 'waiting') UI.closeModal('waiting');
@@ -1518,13 +1832,16 @@ const Common = (() => {
       return `<tr><td class="n">${t('seatN', s + 1)}</td><td style="text-align:start">${label}</td><td>${ctl}</td></tr>`;
     }).join('');
     const full = players.every(Boolean);
-    const sheet = UI.modal('waiting', `<h2>${t('roomN', code)}</h2>
+    const taken = players.filter(Boolean).length;
+    const canStart = isRummy() ? taken >= 2 : full;
+    const hostLine = !isRummy() ? t(full ? 'allHere' : 'fillBots') : full ? t('allHere') : taken >= 2 ? rt('emptyOk', taken) : rt('needTwo');
+    const sheet = UI.modal('waiting', `<h2>${t('roomN', code)}</h2><p class="gline">${gameLabel()}</p>
       <p>${t('waitP')}</p>
       <div class="field"><input readonly value="${UI.esc(url)}" dir="ltr" onclick="this.select()"></div>
       <div class="tbl-wrap"><table class="sc"><tbody>${rows}</tbody></table></div>
-      <p>${isHost() ? t(full ? 'allHere' : 'fillBots') : t('waitHost')}</p>`,
+      <p>${isHost() ? hostLine : t('waitHost')}</p>`,
       [{ label: t('share'), ghost: true, onClick: () => share(url) },
-       ...(isHost() ? [{ label: t('startGame'), disabled: !full, onClick: hostStart }] : []),
+       ...(isHost() ? [{ label: t('startGame'), disabled: !canStart, onClick: hostStart }] : []),
        { label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { switchLang(); redraw(); } }]);
     sheet.querySelectorAll('[data-bot]').forEach(b => b.onclick = () => {
       const used = new Set(players.filter(Boolean).map(p => I18N.mapName(p.name)));
@@ -1534,8 +1851,8 @@ const Common = (() => {
     sheet.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => room.child('players/' + b.dataset.rm).remove());
   }
   async function share(url) {
-    if (navigator.share) { try { await navigator.share({ title: t('title'), text: t('shareText'), url }); return; } catch (e) {} }
-    try { await navigator.clipboard.writeText(url); UI.bubble(mySeat, '📋'); } catch (e) { prompt(t('copyLink'), url); }
+    if (navigator.share) { try { await navigator.share({ title: t('titleOnline'), text: I18N.lang === 'he' ? `בוא/י לשחק איתי ${isRummy() ? rt('name') : rt('hearts')}` : `Come play ${isRummy() ? rt('name') : rt('hearts')} with me`, url }); return; } catch (e) {} }
+    try { await navigator.clipboard.writeText(url); (isRummy() ? rBubble : UI.bubble)(mySeat, '📋'); } catch (e) { prompt(t('copyLink'), url); }
   }
   function endModal(N) {
     const ph = pub.phase;
@@ -1567,11 +1884,6 @@ const Common = (() => {
       else { armed = id; redraw(); }
     }
   }
-  const soloVsBots = seat => [0, 1, 2, 3].every(s => s === seat || isBot(s));
-  function onTable() {
-    // tap the table to sweep a finished trick away — only when the other three seats are all bots
-    if (pub && pub.phase === 'trickEnd' && soloVsBots(mySeat)) send({ type: 'collect' });
-  }
   function onAction(k) {
     if (k === 'pass' && sel.size === 3 && !sent) { sent = true; send({ type: 'pass', cards: [...sel] }); redraw(); }
     if (k === 'revealOk' && pub) { revealAck = pub.handNum; redraw(); }
@@ -1587,7 +1899,7 @@ const Common = (() => {
       ${offline.length ? `<p>${t('offlineToBot')}</p>${offline.map(s => `<button class="btn ghost" data-tobot="${s}" style="margin:4px 0">${t('toBot', UI.esc(N[s]))}</button>`).join('')}` : ''}
       <p style="margin-top:14px">${t('codeIs')} <b dir="ltr">${code || ''}</b></p>`,
       [{ label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { UI.closeModal(); switchLang(); redraw(); } },
-       { label: t('rulesBtn'), ghost: true, onClick: () => UI.modal('rules', `<h2>${t('rulesH')}</h2>` + t('rules'), [{ label: t('close'), close: true }]) },
+       { label: t('rulesBtn'), ghost: true, onClick: () => UI.modal('rules', `<h2>${t('rulesH')}</h2>` + (isRummy() ? rt('rules') : t('rules')), [{ label: t('close'), close: true }]) },
        ...(code ? [{ label: t('share'), ghost: true, onClick: () => share(location.origin + location.pathname + '?room=' + code) }] : []),
        ...(isAdmin() ? [{ label: '🛠 ' + h('adminBtn'), ghost: true, onClick: () => { UI.closeModal(); if (code) window.open(location.pathname + '?admin=1', '_blank'); else adminScreen(); } }] : []),
        { label: t('close'), close: true }]);
@@ -1599,11 +1911,19 @@ const Common = (() => {
     });
   }
   function showScores() {
+    if (isRummy() && pub && pub.history && pub.history.length) return UI.modal('scores', `<h2>${t('scoresH')}</h2>` + rScoreTable(names(), pub.history, pub.scores), [{ label: t('close'), close: true }]);
     if (!pub || !pub.history || !pub.history.length) return UI.modal('scores', `<h2>${t('scoresH')}</h2><p>${t('noHands')}</p>`, [{ label: t('close'), close: true }]);
     UI.modal('scores', `<h2>${t('scoresH')}</h2>` + UI.scoreTable(names(), pub.history, pub.scores, mySeat), [{ label: t('close'), close: true }]);
   }
   function showLast() { UI.modal('last', `<h2>${t('lastTrickH')}</h2>` + UI.trickHTML(pub && pub.lastTrick, names()), [{ label: t('close'), close: true }]); }
-  function switchLang() { I18N.setLang(I18N.other()); UI.applyLang('titleOnline'); }
+  function switchLang() { I18N.setLang(I18N.other()); UI.applyLang('titleOnline'); setHeader(); }
+  function setHeader() {
+    if (rDom) return rApplyLang();
+    const ttl = document.getElementById('ttl'); if (!ttl) return;
+    const ic = ttl.nextElementSibling, inRoom = !!code && mySeat >= 0;
+    ttl.textContent = inRoom ? t('title') : t('titleOnline');
+    if (ic) ic.textContent = inRoom ? '♥' : '♠♥';
+  }
 
   /* ---------- host: runs the game for the whole table ---------- */
   function hostSetup() {
@@ -1614,16 +1934,18 @@ const Common = (() => {
     room.child('actions').on('child_changed', handle);
   }
   function hostStart() {
-    if (!players.every(Boolean)) return;
+    if (isRummy() ? players.filter(Boolean).length < 2 : !players.every(Boolean)) return;
     UI.closeModal('waiting');
+    if (isRummy()) return rHostNew();
     g = Hearts.newGame(names()); Hearts.startHand(g); hostStep();
   }
-  function hostRestart() { UI.closeModal(); g = Hearts.newGame(names()); Hearts.startHand(g); hostStep(); }
+  function hostRestart() { UI.closeModal(); if (isRummy()) return rHostNew(); g = Hearts.newGame(names()); Hearts.startHand(g); hostStep(); }
   let rebuilding = false;
   function maybeRebuild() {
     if (isHost() && !g && !rebuilding && pub && pub.phase !== 'lobby') { rebuilding = true; hostRebuild().finally(() => { rebuilding = false; }); }
   }
   async function hostRebuild() {
+    if (isRummy()) return rHostRebuild();
     const hs = arr4((await room.child('hands').get()).val(), null);
     const st = pub;
     g = {
@@ -1642,12 +1964,12 @@ const Common = (() => {
   function hostAction(seat, a, ref) {
     ref.remove();
     if (!g || !a || isBot(seat)) return;
+    if (g.game === 'rummy') return rHostAction(seat, a);
     let ok = false;
     if (a.type === 'pass') ok = Hearts.setPass(g, seat, list(a.cards));
     else if (a.type === 'play') { const ask = Hearts.canFinish(g); ok = Hearts.playCard(g, seat, a.card); if (ok && ask) g.playOut = true; }
     else if (a.type === 'ready') ok = Hearts.setReady(g, seat);
     else if (a.type === 'claimOk') ok = Hearts.ackClaim(g, seat);
-    else if (a.type === 'collect') { if (!soloVsBots(seat)) return; ok = Hearts.collectTrick(g); if (!ok) return; }
     if (ok) hostStep(); else hostPublish(); // republish so the client un-sticks
   }
   function hostAutoBots() {
@@ -1662,7 +1984,7 @@ const Common = (() => {
         if (isBot(s) && !g.ready[s]) { Hearts.setReady(g, s); changed = true; }
     }
   }
-  function hostStep() { hostAutoBots(); hostPublish(); hostSchedule(); }
+  function hostStep() { if (g && g.game === 'rummy') return rHostStep(); hostAutoBots(); hostPublish(); hostSchedule(); }
   function hostSchedule() {
     clearTimeout(hostTimer);
     if (g.phase === 'trickEnd') hostTimer = setTimeout(() => { Hearts.collectTrick(g); hostStep(); }, SPEED.trick);
@@ -1689,6 +2011,329 @@ const Common = (() => {
     const up = { state: JSON.parse(JSON.stringify(st)) };
     for (let s = 0; s < 4; s++) up['hands/' + s] = { cards: g.hands[s], received: g.received[s] || [], passSel: g.passSel[s] || null };
     room.update(up);
+  }
+
+  /* ================= Rummy (second game) ================= */
+  const RS = {
+    he: {
+      name: 'רמי', hearts: 'לבבות', pick: 'איזה משחק?', heartsSub: '4 שחקנים, עד 100 נקודות. הנמוך מנצח.',
+      rummySub: 'רמי קלאסי ל־2 עד 4 משתתפים. מקום פנוי אפשר למלא ברובוט או להשאיר ריק.',
+      emptyOk: n => `אפשר להתחיל עכשיו עם ${n} משתתפים, ומקומות ריקים יישארו ריקים. אפשר גם להוסיף רובוטים.`,
+      needTwo: 'כדי להתחיל צריך לפחות 2 משתתפים. אפשר להוסיף רובוט.', cardsLbl: 'קלפים לכל שחקן', targetLbl: 'משחקים עד', pts: n => `${n} נקודות`,
+      create: 'פתח שולחן', gameLine: (n, c, tg) => `${n} · ${c} קלפים · עד ${tg}`,
+      stock: 'קופה', discardPile: 'ערימה', noMelds: 'עדיין אין סדרות על השולחן',
+      drawNow: 'תורך: משוך קלף מהקופה, או קח את הקלף העליון מהערימה',
+      playNow: 'הורד סדרות או הוסף לסדרות שעל השולחן, ובסוף זרוק קלף',
+      tapMeld: 'הקש על סדרה מוארת כדי להוסיף אליה את הקלפים שבחרת',
+      takenNote: c => `את ${c} שלקחת מהערימה אי אפשר לזרוק בתור הזה`,
+      turnOf: n => `התור של ${n}`, meldBtn: 'הורד סדרה', discardBtn: 'זרוק', sortSuit: 'מיין לפי צורה', sortRank: 'מיין לפי מספר', clearSel: 'נקה בחירה',
+      lDraw: n => `${n} משך/ה מהקופה`, lTake: (n, c) => `${n} לקח/ה ${c} מהערימה`, lMeld: n => `${n} הוריד/ה סדרה`,
+      lLayoff: n => `${n} הוסיף/ה לסדרה`, lDiscard: (n, c) => `${n} זרק/ה ${c}`,
+      outYou: 'יצאת! ניצחת ביד הזו 🎉', outOther: n => `${n} יצא/ה וניצח/ה ביד`, noWinner: 'הקופה נגמרה שוב ושוב, והיד הסתיימה בלי מנצח.',
+      colLeft: 'קלפים שנשארו', colPts: 'ביד', colTot: 'סה״כ', handOver: n => `סוף יד ${n}`,
+      youWon: 'ניצחת במשחק! 🏆', wonBy: l => `${l} ניצח/ה במשחק`, cardsN: n => `${n} קלפים`,
+      rules: `<div class="rules"><ul>
+        <li>כל שחקן מקבל 7 עד 10 קלפים, לפי מה שהמארח בחר. שאר הקלפים הם הקופה, והקלף העליון נפתח לערימה.</li>
+        <li>בכל תור: מושכים קלף אחד, מהקופה או את הקלף העליון בערימה.</li>
+        <li>אחר כך אפשר להוריד סדרות: 3–4 קלפים מאותו מספר, או רצף של 3 ומעלה באותה צורה. אס יכול להיות נמוך (A-2-3) או גבוה (Q-K-A), אבל לא באמצע (K-A-2).</li>
+        <li>אפשר גם להוסיף קלפים לכל סדרה שעל השולחן, גם של שחקנים אחרים.</li>
+        <li>התור נגמר בזריקת קלף לערימה. את הקלף שלקחת מהערימה אי אפשר לזרוק באותו תור.</li>
+        <li>מי שנפטר מכל הקלפים יוצא ומנצח ביד. הוא מקבל את סכום הקלפים שנשארו אצל האחרים: תמונות 10, אס 1, השאר לפי המספר.</li>
+        <li>כשהקופה נגמרת, הערימה נטרפת ונהיית קופה חדשה. המשחק נגמר כשמישהו מגיע לניקוד היעד, והגבוה מנצח.</li></ul>
+        <p>במסך: מקישים על קלפים כדי לבחור אותם, ואז על "הורד סדרה", על סדרה מוארת בשולחן, או על "זרוק".</p></div>`,
+    },
+    en: {
+      name: 'Rummy', hearts: 'Hearts', pick: 'Which game?', heartsSub: '4 players, to 100 points. Lowest wins.',
+      rummySub: 'Classic Rummy for 2 to 4 players. Fill empty seats with robots or leave them empty.',
+      emptyOk: n => `You can start now with ${n} players; empty seats stay empty. You can also add robots.`,
+      needTwo: 'You need at least 2 players to start. You can add a robot.', cardsLbl: 'Cards per player', targetLbl: 'Play to', pts: n => `${n} points`,
+      create: 'Open table', gameLine: (n, c, tg) => `${n} · ${c} cards · to ${tg}`,
+      stock: 'Stock', discardPile: 'Discard', noMelds: 'No melds on the table yet',
+      drawNow: 'Your turn: draw from the stock, or take the top card of the discard pile',
+      playNow: 'Lay down melds or add to melds on the table, then discard a card',
+      tapMeld: 'Tap a highlighted meld to add your selected cards to it',
+      takenNote: c => `You can't discard the ${c} you took this turn`,
+      turnOf: n => `${n}'s turn`, meldBtn: 'Lay down meld', discardBtn: 'Discard', sortSuit: 'Sort by suit', sortRank: 'Sort by rank', clearSel: 'Clear',
+      lDraw: n => `${n} drew from the stock`, lTake: (n, c) => `${n} took ${c} from the discard pile`, lMeld: n => `${n} laid down a meld`,
+      lLayoff: n => `${n} added to a meld`, lDiscard: (n, c) => `${n} discarded ${c}`,
+      outYou: 'You went out and won the hand! 🎉', outOther: n => `${n} went out and won the hand`, noWinner: 'The stock ran out again and again, so the hand ended with no winner.',
+      colLeft: 'Cards left', colPts: 'Hand', colTot: 'Total', handOver: n => `Hand ${n} over`,
+      youWon: 'You won the game! 🏆', wonBy: l => `${l} won the game`, cardsN: n => `${n} cards`,
+      rules: `<div class="rules"><ul>
+        <li>Each player gets 7 to 10 cards, as the host chose. The rest form the stock, and its top card starts the discard pile.</li>
+        <li>On your turn, draw one card: from the stock or the top of the discard pile.</li>
+        <li>Then you may lay down melds: 3–4 cards of the same rank, or a run of 3 or more in one suit. An ace can be low (A-2-3) or high (Q-K-A), but not in the middle (K-A-2).</li>
+        <li>You may also add cards to any meld on the table, including other players' melds.</li>
+        <li>End your turn by discarding a card. You can't discard the card you took from the discard pile on the same turn.</li>
+        <li>Whoever gets rid of all their cards goes out and wins the hand, scoring the value of everyone else's cards: face cards 10, ace 1, others their number.</li>
+        <li>When the stock runs out, the discard pile is shuffled into a new stock. The game ends when someone reaches the target score; highest wins.</li></ul>
+        <p>On screen: tap cards to select them, then tap "Lay down meld", a highlighted meld on the table, or "Discard".</p></div>`,
+    },
+  };
+  const rt = (k, ...a) => { const v = RS[I18N.lang][k]; return typeof v === 'function' ? v(...a) : v; };
+  const isRummy = () => (meta && meta.game === 'rummy') || (pub && pub.game === 'rummy');
+  const cardName = c => `${Hearts.rankTxt(Rummy.rank(c))}${Hearts.SYM[Rummy.suit(c)]}`;
+  let rSort = (() => { try { return localStorage.getItem('rummy-sort') || 'suit'; } catch (e) { return 'suit'; } })();
+  let rSel = new Set(), rPrevHand = null, rNew = new Set(), rDom = null, rLastMeldIds = new Set(), rMeldsSeen = false;
+
+  /* ---- choosing the game when opening a table ---- */
+  function chooseGame(name) {
+    const opt = (n, sel) => `<option value="${n}"${n === sel ? ' selected' : ''}>${n}</option>`;
+    const sheet = UI.modal('pick', `<h2>${rt('pick')}</h2>
+      <label class="gpick"><input type="radio" name="gm" value="hearts" checked><span><b>♥ ${rt('hearts')}</b><small>${rt('heartsSub')}</small></span></label>
+      <label class="gpick"><input type="radio" name="gm" value="rummy"><span><b>🃏 ${rt('name')}</b><small>${rt('rummySub')}</small></span></label>
+      <div class="ropts" id="ropts" hidden>
+        <div class="field"><label for="rc">${rt('cardsLbl')}</label><select id="rc">${[7, 8, 9, 10].map(n => opt(n, 7)).join('')}</select></div>
+        <div class="field"><label for="rtg">${rt('targetLbl')}</label><select id="rtg">${[50, 100, 200, 300].map(n => `<option value="${n}"${n === 100 ? ' selected' : ''}>${rt('pts', n)}</option>`).join('')}</select></div>
+      </div><div class="err" id="err3"></div>`,
+      [{ label: rt('create'), onClick: async () => {
+        const game = sheet.querySelector('input[name=gm]:checked').value;
+        const opts = game === 'rummy' ? { cards: +sheet.querySelector('#rc').value, target: +sheet.querySelector('#rtg').value } : null;
+        try { await createRoom(name, game, opts); } catch (e) { sheet.querySelector('#err3').textContent = e.message || String(e); }
+      } }, { label: t('cancel'), ghost: true, onClick: () => lobby() }]);
+    sheet.querySelectorAll('input[name=gm]').forEach(r => r.onchange = () => { sheet.querySelector('#ropts').hidden = sheet.querySelector('input[name=gm]:checked').value !== 'rummy'; });
+  }
+  function gameLabel() {
+    if (!isRummy()) return '♥ ' + rt('hearts');
+    const o = (meta && meta.opts) || {};
+    return '🃏 ' + rt('gameLine', rt('name'), o.cards || 7, o.target || 100);
+  }
+
+  /* ---- state from Firebase ---- */
+  function rnorm(v) {
+    v = v || {};
+    const st = Object.assign({ phase: 'lobby' }, v);
+    st.game = 'rummy';
+    st.active = v.active ? arr4(v.active, false) : [true, true, true, true];
+    st.scores = arr4(v.scores, 0); st.counts = arr4(v.counts, 0); st.ready = arr4(v.ready, false);
+    st.handDelta = arr4(v.handDelta, 0); st.names = arr4(v.names, '');
+    st.history = list(v.history).map(h => arr4(h, 0));
+    st.discard = list(v.discard);
+    st.melds = list(v.melds).map(m => ({ id: m.id, type: m.type, owner: m.owner, cards: list(m.cards) }));
+    st.winners = list(v.winners);
+    st.left = v.left ? arr4(v.left, null).map(list) : null;
+    st.turn = v.turn != null ? v.turn : -1;
+    st.winner = v.winner != null ? v.winner : null;
+    return st;
+  }
+
+  /* ---- table DOM ---- */
+  function rMount() {
+    if (rDom) return;
+    const app = document.getElementById('app');
+    app.querySelector('main.table').style.display = 'none';
+    const lb = document.getElementById('bLast'); if (lb) lb.style.display = 'none';
+    const m = document.createElement('main'); m.className = 'rtable';
+    m.innerHTML = `<div class="ropps" style="direction:ltr"></div>
+      <div class="rmid"><button class="rpile rstock" aria-label="stock"><span class="back"></span><span class="rbadge"></span><span class="rlbl"></span></button>
+        <button class="rpile rdisc" aria-label="discard"><span class="rtop"></span><span class="rbadge"></span><span class="rlbl"></span></button></div>
+      <div class="rstatus"></div><div class="rlast"></div>
+      <div class="rmelds" style="direction:ltr"></div>
+      <div class="rme"></div>
+      <div class="rhand"></div>
+      <div class="ractions"></div>`;
+    app.appendChild(m);
+    rDom = { m, opps: m.querySelector('.ropps'), stock: m.querySelector('.rstock'), disc: m.querySelector('.rdisc'), status: m.querySelector('.rstatus'),
+      last: m.querySelector('.rlast'), melds: m.querySelector('.rmelds'), me: m.querySelector('.rme'), hand: m.querySelector('.rhand'), acts: m.querySelector('.ractions') };
+    rDom.stock.onclick = () => rDraw('stock');
+    rDom.disc.onclick = () => rDraw('discard');
+    window.addEventListener('resize', () => rDom && rLayoutHand());
+    rApplyLang();
+  }
+  function rApplyLang() {
+    if (!rDom) return;
+    const ttl = document.getElementById('ttl'); if (ttl) { ttl.textContent = rt('name'); const ic = ttl.nextElementSibling; if (ic) { ic.textContent = '♣'; ic.style.color = 'var(--ink)'; } }
+    document.title = rt('name');
+    [rDom.status, rDom.last, rDom.me, rDom.acts].forEach(e => e.setAttribute('dir', I18N.dir));
+    rDom.stock.querySelector('.rlbl').textContent = rt('stock');
+    rDom.disc.querySelector('.rlbl').textContent = rt('discardPile');
+  }
+  const rel = s => (s - mySeat + 4) % 4;
+  function plate(s, N, pv, cls) {
+    const p = pv[s] || {};
+    return `<div class="rpl ${cls}${pub.turn === s && pub.phase === 'play' ? ' turn' : ''}${p.online === false && !p.bot ? ' off' : ''}" data-seat="${s}">
+      <div class="av">${p.bot ? '🤖' : UI.esc((N[s] || '?').trim().charAt(0))}</div>
+      <div class="who"><b>${UI.esc(N[s])}</b><small>${UI.esc(p.note || '')}</small></div>
+      <div class="rinfo">${s !== mySeat ? `<span class="rcnt"><i class="back"></i>${pub.counts[s] || 0}</span>` : ''}<span class="score">${pub.scores[s]}</span></div></div>`;
+  }
+  function rRedraw() {
+    rMount();
+    const N = names();
+    if (pub.phase === 'lobby') { rDom.m.classList.add('idle'); return waitingRoom(N); }
+    rDom.m.classList.remove('idle');
+    const sub = document.getElementById('sub'); if (sub) sub.textContent = t('roomHand', code, pub.handNum + 1);
+    if (UI.currentModal() === 'waiting') UI.closeModal('waiting');
+    const pv = playersView(N, {});
+    const myTurn = pub.phase === 'play' && pub.turn === mySeat && !sent;
+    // opponents: left, across, right
+    rDom.opps.innerHTML = [1, 2, 3].map(r => (mySeat + r) % 4).filter(s => pub.active[s]).map(s => plate(s, N, pv, 'ropp')).join('');
+    rDom.me.innerHTML = plate(mySeat, N, pv, 'rmine');
+    // piles
+    const canDraw = myTurn && pub.step === 'draw';
+    rDom.stock.classList.toggle('can', canDraw);
+    rDom.disc.classList.toggle('can', canDraw && pub.discard.length > 0);
+    rDom.stock.querySelector('.rbadge').textContent = pub.stockCount || 0;
+    rDom.stock.querySelector('.back').style.visibility = pub.stockCount ? 'visible' : 'hidden';
+    const top = pub.discard[pub.discard.length - 1];
+    rDom.disc.querySelector('.rtop').innerHTML = top ? UI.cardHTML(top) : '';
+    rDom.disc.querySelector('.rbadge').textContent = pub.discard.length || '';
+    // hand
+    const hand = Rummy.sortHand(myHand.cards, rSort);
+    const hs = new Set(hand);
+    if (rPrevHand && pub.phase === 'play') hand.forEach(c => { if (!rPrevHand.has(c) && rPrevHand.size) rNew.add(c); });
+    if (!(pub.phase === 'play' && pub.turn === mySeat)) rNew.clear();
+    rPrevHand = hs;
+    for (const c of [...rSel]) if (!hs.has(c)) rSel.delete(c);
+    const selArr = [...rSel];
+    const playing = myTurn && pub.step === 'play';
+    // melds
+    const targets = playing && selArr.length ? new Set(pub.melds.filter(m => (m.type === 'set' ? Rummy.asSet : Rummy.asRun)(m.cards.concat(selArr))).map(m => m.id)) : new Set();
+    const fresh = pub.melds.filter(m => !rLastMeldIds.has(m.id)).map(m => m.id);
+    rLastMeldIds = new Set(pub.melds.map(m => m.id)); const wasSeen = rMeldsSeen; rMeldsSeen = true;
+    rDom.melds.innerHTML = pub.melds.length ? pub.melds.map(m => `<button class="rmeld${targets.has(m.id) ? ' can' : ''}${wasSeen && fresh.includes(m.id) ? ' fresh' : ''}" data-id="${m.id}" title="${UI.esc(N[m.owner])}">${m.cards.map(UI.cardHTML).join('')}</button>`).join('')
+      : `<div class="rempty" dir="${I18N.dir}">${rt('noMelds')}</div>`;
+    rDom.melds.querySelectorAll('.rmeld.can').forEach(b => b.onclick = () => { const ids = [...rSel]; rSel.clear(); sent = true; send({ type: 'layoff', cards: ids, meld: +b.dataset.id }); rRedraw(); });
+    // hand cards
+    rDom.hand.innerHTML = hand.map(c => UI.cardHTML(c)).join('');
+    rDom.hand.querySelectorAll('.card').forEach(el => {
+      const c = el.dataset.id;
+      el.classList.toggle('sel', rSel.has(c));
+      el.classList.toggle('new', rNew.has(c));
+      el.classList.toggle('locked', playing && pub.drewFrom === 'discard' && pub.takenCard === c && hand.length > 1);
+      el.tabIndex = 0; el.setAttribute('role', 'button');
+      el.onclick = () => { if (rSel.has(c)) rSel.delete(c); else rSel.add(c); rRedraw(); };
+    });
+    rLayoutHand();
+    // status
+    let st = '';
+    if (pub.phase === 'play') {
+      if (myTurn) st = pub.step === 'draw' ? rt('drawNow') : (targets.size ? rt('tapMeld') : rt('playNow'));
+      else st = rt('turnOf', UI.esc(N[pub.turn]));
+    }
+    if (playing && pub.drewFrom === 'discard' && pub.takenCard && hand.length > 1 && !targets.size) st += `<br><small>${rt('takenNote', cardName(pub.takenCard))}</small>`;
+    rDom.status.innerHTML = hostBanner() || st;
+    const L = pub.last;
+    rDom.last.textContent = !L || pub.phase !== 'play' ? '' :
+      L.kind === 'draw' ? rt('lDraw', N[L.seat]) : L.kind === 'take' ? rt('lTake', N[L.seat], cardName(L.card)) :
+      L.kind === 'meld' ? rt('lMeld', N[L.seat]) : L.kind === 'layoff' ? rt('lLayoff', N[L.seat]) : rt('lDiscard', N[L.seat], cardName(L.card));
+    // actions
+    const meldOk = playing && selArr.length >= 3 && !!Rummy.asMeld(selArr);
+    const discOk = playing && selArr.length === 1 && !(pub.drewFrom === 'discard' && pub.takenCard === selArr[0] && hand.length > 1);
+    const acts = [];
+    if (playing) {
+      acts.push(`<button class="btn" data-a="meld"${meldOk ? '' : ' disabled'}>${rt('meldBtn')}</button>`);
+      acts.push(`<button class="btn" data-a="disc"${discOk ? '' : ' disabled'}>${rt('discardBtn')}</button>`);
+    }
+    if (rSel.size) acts.push(`<button class="btn ghost" data-a="clear">${rt('clearSel')}</button>`);
+    acts.push(`<button class="btn ghost" data-a="sort">${rt(rSort === 'suit' ? 'sortRank' : 'sortSuit')}</button>`);
+    rDom.acts.innerHTML = acts.join('');
+    rDom.acts.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
+      const a = b.dataset.a;
+      if (a === 'sort') { rSort = rSort === 'suit' ? 'rank' : 'suit'; try { localStorage.setItem('rummy-sort', rSort); } catch (e) {} return rRedraw(); }
+      if (a === 'clear') { rSel.clear(); return rRedraw(); }
+      if (a === 'meld' && meldOk) { rSel.clear(); sent = true; send({ type: 'meld', cards: selArr }); return rRedraw(); }
+      if (a === 'disc' && discOk) { rSel.clear(); sent = true; send({ type: 'discard', card: selArr[0] }); return rRedraw(); }
+    });
+    rEndModal(N);
+  }
+  function rDraw(from) {
+    if (!pub || pub.phase !== 'play' || pub.turn !== mySeat || pub.step !== 'draw' || sent) return;
+    if (from === 'discard' && !pub.discard.length) return;
+    sent = true; send({ type: 'draw', from }); rRedraw();
+  }
+  function rLayoutHand() {
+    const els = [...rDom.hand.querySelectorAll('.card')];
+    if (!els.length) return;
+    const W = rDom.hand.clientWidth, cw = els[0].offsetWidth || 56, n = els.length;
+    const step = n > 1 ? Math.min(cw * 0.8, (W - cw) / (n - 1)) : 0;
+    const start = (W - (cw + step * (n - 1))) / 2;
+    els.forEach((el, i) => { el.style.left = (start + i * step) + 'px'; el.style.zIndex = i + 1; });
+  }
+  function rBubble(seat, e) {
+    const el = rDom && rDom.m.querySelector(`.rpl[data-seat="${seat}"]`);
+    if (!el) return;
+    const b = document.createElement('div'); b.className = 'bubble'; b.textContent = e;
+    el.appendChild(b); setTimeout(() => b.remove(), 2500);
+  }
+  function rScoreTable(N, hist, scores) {
+    const A = [0, 1, 2, 3].filter(s => !pub || pub.active[s]);
+    const mx = Math.max(...A.map(s => scores[s]));
+    return `<div class="tbl-wrap"><table class="sc"><thead><tr><th>${t('colHand')}</th>${A.map(i => `<th>${UI.esc(N[i])}${i === mySeat ? t('me') : ''}</th>`).join('')}</tr></thead><tbody>
+      ${hist.map((h, k) => `<tr><td class="n">${k + 1}</td>${A.map(i => `<td>${h[i] || ''}</td>`).join('')}</tr>`).join('')}
+      <tr class="tot"><td class="n">${t('colTotal')}</td>${A.map(i => `<td class="${scores[i] === mx && mx > 0 ? 'best' : ''}">${scores[i]}</td>`).join('')}</tr></tbody></table></div>`;
+  }
+  function rEndModal(N) {
+    const ph = pub.phase;
+    if (ph !== 'handEnd' && ph !== 'gameOver') { UI.closeModal('rend'); return; }
+    let title, line = '';
+    if (ph === 'gameOver') title = pub.winners.includes(mySeat) ? rt('youWon') : rt('wonBy', pub.winners.map(i => N[i]).join(t('and')));
+    else title = rt('handOver', pub.handNum + 1);
+    if (pub.winner == null) line = `<p>${rt('noWinner')}</p>`;
+    else line = `<p>${pub.winner === mySeat ? rt('outYou') : rt('outOther', UI.esc(N[pub.winner]))}</p>`;
+    const left = pub.left || [[], [], [], []];
+    const rows = [0, 1, 2, 3].filter(s => pub.active[s]).map(s => `<tr><td class="n">${UI.esc(N[s])}${s === mySeat ? t('me') : ''}</td>
+      <td><div class="rleft">${left[s] && left[s].length ? Rummy.sortHand(left[s]).map(UI.cardHTML).join('') : '—'}</div></td>
+      <td dir="ltr">${pub.handDelta[s] ? '<b>+' + pub.handDelta[s] + '</b>' : (left[s] && left[s].length ? `<span style="color:var(--muted)">(${Rummy.handValue(left[s])})</span>` : '')}</td>
+      <td style="font-family:var(--serif);font-weight:700">${pub.scores[s]}</td></tr>`).join('');
+    const ready = ph === 'handEnd' ? `<p>${t('readyList', [0, 1, 2, 3].filter(s => pub.active[s] && pub.ready[s]).map(s => UI.esc(N[s])).join(', ') || t('nobodyYet'))}</p>` : '';
+    const btns = ph === 'handEnd'
+      ? [{ label: t(pub.ready[mySeat] ? 'waitOthers' : 'readyBtn'), disabled: pub.ready[mySeat], onClick: () => send({ type: 'ready' }) }]
+      : (isHost() ? [{ label: t('restart'), onClick: hostRestart }] : []);
+    UI.modal('rend', `<h2>${UI.esc(title)}</h2>${line}
+      <div class="tbl-wrap"><table class="sc"><thead><tr><th style="text-align:start">${t('colPlayer')}</th><th>${rt('colLeft')}</th><th>${rt('colPts')}</th><th>${rt('colTot')}</th></tr></thead><tbody>${rows}</tbody></table></div>
+      ${ready}${ph === 'gameOver' ? rScoreTable(N, pub.history, pub.scores) + (isHost() ? '' : `<p>${t('hostCanRestart')}</p>`) : ''}`, btns);
+  }
+
+  /* ---- host side ---- */
+  function rHostNew() { g = Rummy.newGame(names(), (meta && meta.opts) || {}, players.map(Boolean)); Rummy.startHand(g); rHostStep(); }
+  function rHostAction(seat, a) {
+    let ok = false;
+    if (a.type === 'draw') ok = Rummy.draw(g, seat, a.from);
+    else if (a.type === 'meld') ok = Rummy.meld(g, seat, list(a.cards));
+    else if (a.type === 'layoff') ok = Rummy.layoff(g, seat, list(a.cards), +a.meld);
+    else if (a.type === 'discard') ok = Rummy.discard(g, seat, a.card);
+    else if (a.type === 'ready') ok = Rummy.setReady(g, seat);
+    if (ok) rHostStep(); else rHostPublish();
+  }
+  function rHostStep() {
+    if (g.phase === 'handEnd') for (let s = 0; s < 4; s++) if (isBot(s) && !g.ready[s]) Rummy.setReady(g, s);
+    rHostPublish();
+    clearTimeout(hostTimer);
+    if (g.phase === 'play' && isBot(g.turn)) {
+      hostTimer = setTimeout(() => {
+        const s = g.turn;
+        if (g.phase !== 'play' || !isBot(s)) return;
+        RBot.apply(g, s, RBot.nextAction(g, s));
+        rHostStep();
+      }, g.step === 'draw' ? 900 : 1100);
+    }
+  }
+  function rHostPublish() {
+    g.seq = (g.seq || 0) + 1;
+    const over = g.phase === 'handEnd' || g.phase === 'gameOver';
+    const st = {
+      game: 'rummy', active: g.active, phase: g.phase, handNum: g.handNum, dealer: g.dealer, names: g.names, target: g.target, nCards: g.nCards, seq: g.seq,
+      scores: g.scores, history: g.history, turn: g.turn, step: g.step, discard: g.discard, melds: g.melds, meldSeq: g.meldSeq,
+      counts: g.hands.map(x => x.length), stockCount: g.stock.length, drewFrom: g.drewFrom, takenCard: g.takenCard, reshuffles: g.reshuffles,
+      last: g.last, ready: g.ready, winner: g.winner, handDelta: g.handDelta, winners: g.winners, left: over ? g.hands : null,
+    };
+    const up = { state: JSON.parse(JSON.stringify(st)) };
+    for (let s = 0; s < 4; s++) up['hands/' + s] = { cards: g.hands[s] };
+    up['hands/4'] = { cards: g.stock };
+    room.update(up);
+  }
+  async function rHostRebuild() {
+    const hs = arr4((await room.child('hands').get()).val(), null);
+    const stock = list(((await room.child('hands/4').get()).val() || {}).cards);
+    const st = pub;
+    g = { game: 'rummy', active: st.active, names: st.names, nCards: st.nCards, target: st.target, scores: st.scores, history: st.history, handNum: st.handNum,
+      dealer: st.dealer, phase: st.phase, seq: st.seq || 0, meldSeq: st.meldSeq || Math.max(0, ...st.melds.map(m => m.id)),
+      hands: hs.map(x => list(x && x.cards)), stock, discard: st.discard, melds: st.melds, turn: st.turn, step: st.step,
+      drewFrom: st.drewFrom || null, takenCard: st.takenCard || null, reshuffles: st.reshuffles || 0, last: st.last || null,
+      ready: st.ready, winner: st.winner, handDelta: st.handDelta, winners: st.winners.length ? st.winners : null };
+    rHostStep();
+    const pending = (await room.child('actions').get()).val() || {};
+    Object.keys(pending).forEach(k => hostAction(+k, pending[k], room.child('actions/' + k)));
   }
 
   boot();
