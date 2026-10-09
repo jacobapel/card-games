@@ -1419,7 +1419,7 @@ const RBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 7;
+  const APP_VER = 9;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -2191,6 +2191,8 @@ const RBot = (() => {
         <li>אחר כך אפשר להוריד סדרות: 3–4 קלפים מאותו מספר, או רצף של 3 ומעלה באותה צורה. אס יכול להיות נמוך (A-2-3) או גבוה (Q-K-A), אבל לא באמצע (K-A-2).</li>
         <li>אפשר גם להוסיף קלפים לכל סדרה שעל השולחן, גם של שחקנים אחרים.</li>
         <li>מותר לסדר מחדש את הסדרות שעל השולחן, לפצל אותן או להעביר קלפים ביניהן, בתנאי שמוסיפים לפחות קלף אחד מהיד, שאף קלף מהשולחן לא חוזר ליד, ושבסוף כל הסדרות תקינות. אחרי סידור כזה כל השחקנים יכולים לראות את המצב הקודם, והמשחק ממשיך כשכולם לוחצים "המשך".</li>
+        <li>בין תור לתור יש המתנה של 4 שניות, כדי שכולם יספיקו לראות איזה קלף נזרק. בזמן הזה הערמה והקופה עוד לא זמינות, והן מתחילות להבהב כשאפשר לקחת.</li>
+        <li>אפשר לסדר את הקלפים ביד בגרירה: מחזיקים קלף, מזיזים הצידה ועוזבים. כפתור המיון מחזיר את השורה למיון.</li>
         <li>התור נגמר בזריקת קלף לערימה. את הקלף שלקחת מהערימה אי אפשר לזרוק באותו תור.</li>
         <li>מי שנפטר מכל הקלפים יוצא ומנצח ביד. הוא מקבל את סכום הקלפים שנשארו אצל האחרים: תמונות 10, אס 1, השאר לפי המספר.</li>
         <li>כשהקופה נגמרת, הערימה נטרפת ונהיית קופה חדשה. המשחק נגמר כשמישהו מגיע לניקוד היעד, והגבוה מנצח.</li></ul>
@@ -2226,6 +2228,8 @@ const RBot = (() => {
         <li>Then you may lay down melds: 3–4 cards of the same rank, or a run of 3 or more in one suit. An ace can be low (A-2-3) or high (Q-K-A), but not in the middle (K-A-2).</li>
         <li>You may also add cards to any meld on the table, including other players' melds.</li>
         <li>You may rearrange the melds on the table, splitting them or moving cards between them, as long as you add at least one card from your hand, no table card goes back to a hand, and every meld is valid at the end. Afterwards everyone can look at the previous layout, and play continues once all players press "Continue".</li>
+        <li>There is a 4-second pause between turns so everyone can see which card was discarded. During it the stock and discard pile are not yet available; they start glowing when you can draw.</li>
+        <li>You can reorder the cards in your hand by dragging: hold a card, slide it sideways and let go. The sort button puts the row back in sorted order.</li>
         <li>End your turn by discarding a card. You can't discard the card you took from the discard pile on the same turn.</li>
         <li>Whoever gets rid of all their cards goes out and wins the hand, scoring the value of everyone else's cards: face cards 10, ace 1, others their number.</li>
         <li>When the stock runs out, the discard pile is shuffled into a new stock. The game ends when someone reaches the target score; highest wins.</li></ul>
@@ -2235,6 +2239,7 @@ const RBot = (() => {
   const rt = (k, ...a) => { const v = RS[I18N.lang][k]; return typeof v === 'function' ? v(...a) : v; };
   const isRummy = () => (meta && meta.game === 'rummy') || (pub && pub.game === 'rummy');
   const cardName = c => `${Hearts.rankTxt(Rummy.rank(c))}${Hearts.SYM[Rummy.suit(c)]}`;
+  let rTurnKey = '', rTurnAt = 0, rWaitT = null;
   let rOrder = null, rOrderHand = -1, rDragged = false, rDragging = false, rHeld = false;
   function rHandOrder(cards) {
     const sorted = Rummy.sortHand(cards, rSort);
@@ -2344,7 +2349,11 @@ const RBot = (() => {
     rDom.opps.innerHTML = [1, 2, 3].map(r => (mySeat + r) % 4).filter(s => pub.active[s]).map(s => plate(s, N, pv, 'ropp')).join('');
     rDom.me.innerHTML = plate(mySeat, N, pv, 'rmine');
     // piles
-    const canDraw = myTurn && pub.step === 'draw';
+    const tk = pub.handNum + ':' + pub.turn + ':' + JSON.stringify(pub.last || null);
+    if (tk !== rTurnKey) { rTurnKey = tk; rTurnAt = pub.last ? Date.now() : 0; }
+    const wait = Math.max(0, rTurnAt + R_PASS_MS - Date.now());
+    clearTimeout(rWaitT); if (wait && myTurn) rWaitT = setTimeout(rRedraw, wait + 30);
+    const canDraw = myTurn && pub.step === 'draw' && !wait;
     rDom.stock.classList.toggle('can', canDraw);
     rDom.disc.classList.toggle('can', canDraw && pub.discard.length > 0);
     rDom.stock.querySelector('.rbadge').textContent = '';
@@ -2493,6 +2502,7 @@ const RBot = (() => {
   function rDraw(from) {
     if (!pub || pub.phase !== 'play' || pub.turn !== mySeat || pub.step !== 'draw' || sent) return;
     if (from === 'discard' && !pub.discard.length) return;
+    if (rTurnAt + R_PASS_MS > Date.now()) return;
     sent = true; send({ type: 'draw', from }); rRedraw();
   }
   function rLayoutHand(els = [...rDom.hand.querySelectorAll('.card')], skip = null) {
@@ -2583,6 +2593,7 @@ const RBot = (() => {
     else if (a.type === 'ready') ok = Rummy.setReady(g, seat);
     if (ok) rHostStep(); else rHostPublish();
   }
+  const R_PASS_MS = 4000;   // pause between turns so everyone sees the discard
   function rHostStep() {
     if (g.phase === 'handEnd') for (let s = 0; s < 4; s++) if (isBot(s) && !g.ready[s]) Rummy.setReady(g, s);
     if (g.review) for (let s = 0; s < 4; s++) if (isBot(s) && g.review && !g.review.ack[s]) Rummy.ackReview(g, s);
@@ -2594,7 +2605,7 @@ const RBot = (() => {
         if (g.phase !== 'play' || g.review || !isBot(s)) return;
         RBot.apply(g, s, RBot.nextAction(g, s));
         rHostStep();
-      }, g.step === 'draw' ? 900 : 1100);
+      }, g.step === 'draw' ? (g.last ? R_PASS_MS : 900) : 1100);
     }
   }
   function rHostPublish() {
