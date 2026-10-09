@@ -29,7 +29,8 @@ html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
 body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
   -webkit-tap-highlight-color:transparent;overscroll-behavior:none;user-select:none;-webkit-user-select:none}
 button{font:inherit;color:inherit;cursor:pointer}
-#app{height:100%;display:grid;grid-template-rows:auto 1fr;max-width:900px;margin:0 auto}
+#app{height:100%;display:grid;grid-template-rows:auto 1fr;grid-template-columns:minmax(0,1fr);max-width:900px;margin:0 auto}
+html,body{overflow-x:hidden}
 
 /* header */
 .bar{display:flex;align-items:center;gap:6px;padding:8px 10px;min-width:0}
