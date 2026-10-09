@@ -219,6 +219,7 @@ tr.clk:hover td{background:rgba(201,162,74,.12)}
 @keyframes rfresh{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
 .rhand{position:relative;height:calc(var(--rcw)*1.42 + 18px);direction:ltr;flex:none}
 .rhand .card{--sz:var(--rcw);position:absolute;bottom:0;width:var(--rcw);height:calc(var(--rcw)*1.42);transition:transform .15s ease,left .2s ease;cursor:pointer;touch-action:manipulation}
+.rhand .card.got{transform:translateY(-22px);box-shadow:0 0 0 2.5px var(--brass),0 8px 16px rgba(0,0,0,.45);cursor:default}
 .rhand .card.sel{transform:translateY(-16px);box-shadow:0 0 0 2.5px var(--brass),0 8px 16px rgba(0,0,0,.45)}
 .rhand .card.new::after{content:"";position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--brass);box-shadow:0 0 0 2px var(--card)}
 .rhand .card.locked{box-shadow:0 0 0 2px rgba(236,212,154,.45) inset,0 3px 8px rgba(0,0,0,.35)}
@@ -2101,6 +2102,7 @@ const RBot = (() => {
       playNow: 'הורד סדרות או הוסף לסדרות שעל השולחן, ובסוף זרוק קלף',
       tapMeld: 'הקש על סדרה מוארת כדי להוסיף אליה את הקלפים שבחרת',
       takenNote: c => `את ${c} שלקחת מהערימה אי אפשר לזרוק בתור הזה`,
+      gotFromStock: c => `משכת ${c} מהקופה. לחץ "המשך" כדי להכניס אותו ליד.`, gotFromDisc: c => `לקחת ${c} מהערימה. לחץ "המשך" כדי להכניס אותו ליד.`,
       turnOf: n => `התור של ${n}`, meldBtn: 'הורד סדרה', discardBtn: 'זרוק', sortSuit: 'מיין לפי צורה', sortRank: 'מיין לפי מספר', clearSel: 'נקה בחירה',
       lDraw: n => `${n} משך/ה מהקופה`, lTake: (n, c) => `${n} לקח/ה ${c} מהערימה`, lMeld: n => `${n} הוריד/ה סדרה`,
       lLayoff: n => `${n} הוסיף/ה לסדרה`, lDiscard: (n, c) => `${n} זרק/ה ${c}`,
@@ -2128,6 +2130,7 @@ const RBot = (() => {
       playNow: 'Lay down melds or add to melds on the table, then discard a card',
       tapMeld: 'Tap a highlighted meld to add your selected cards to it',
       takenNote: c => `You can't discard the ${c} you took this turn`,
+      gotFromStock: c => `You drew ${c} from the stock. Press "Continue" to add it to your hand.`, gotFromDisc: c => `You took ${c} from the discard pile. Press "Continue" to add it to your hand.`,
       turnOf: n => `${n}'s turn`, meldBtn: 'Lay down meld', discardBtn: 'Discard', sortSuit: 'Sort by suit', sortRank: 'Sort by rank', clearSel: 'Clear',
       lDraw: n => `${n} drew from the stock`, lTake: (n, c) => `${n} took ${c} from the discard pile`, lMeld: n => `${n} laid down a meld`,
       lLayoff: n => `${n} added to a meld`, lDiscard: (n, c) => `${n} discarded ${c}`,
@@ -2149,6 +2152,7 @@ const RBot = (() => {
   const isRummy = () => (meta && meta.game === 'rummy') || (pub && pub.game === 'rummy');
   const cardName = c => `${Hearts.rankTxt(Rummy.rank(c))}${Hearts.SYM[Rummy.suit(c)]}`;
   let rSort = (() => { try { return localStorage.getItem('rummy-sort') || 'suit'; } catch (e) { return 'suit'; } })();
+  let rRevealAck = '';
   let rSel = new Set(), rPrevHand = null, rNew = new Set(), rDom = null, rLastMeldIds = new Set(), rMeldsSeen = false;
 
   /* ---- choosing the game when opening a table ---- */
@@ -2259,8 +2263,12 @@ const RBot = (() => {
     if (!(pub.phase === 'play' && pub.turn === mySeat)) rNew.clear();
     rPrevHand = hs;
     for (const c of [...rSel]) if (!hs.has(c)) rSel.delete(c);
+    // a freshly drawn card stays raised until the player presses "Continue"
+    const drawn = myTurn && pub.step === 'play' && rNew.size === 1 ? [...rNew][0] : null;
+    const revealing = !!drawn && rRevealAck !== pub.handNum + ':' + drawn;
+    if (revealing) rSel.clear();
     const selArr = [...rSel];
-    const playing = myTurn && pub.step === 'play';
+    const playing = myTurn && pub.step === 'play' && !revealing;
     // melds
     const targets = playing && selArr.length ? new Set(pub.melds.filter(m => (m.type === 'set' ? Rummy.asSet : Rummy.asRun)(m.cards.concat(selArr))).map(m => m.id)) : new Set();
     const fresh = pub.melds.filter(m => !rLastMeldIds.has(m.id)).map(m => m.id);
@@ -2273,39 +2281,42 @@ const RBot = (() => {
     rDom.hand.querySelectorAll('.card').forEach(el => {
       const c = el.dataset.id;
       el.classList.toggle('sel', rSel.has(c));
-      el.classList.toggle('new', rNew.has(c));
+      el.classList.toggle('new', rNew.has(c) && !revealing);
+      el.classList.toggle('got', revealing && c === drawn);
       el.classList.toggle('locked', playing && pub.drewFrom === 'discard' && pub.takenCard === c && hand.length > 1);
       el.tabIndex = 0; el.setAttribute('role', 'button');
-      el.onclick = () => { if (rSel.has(c)) rSel.delete(c); else rSel.add(c); rRedraw(); };
+      el.onclick = () => { if (revealing) return; if (rSel.has(c)) rSel.delete(c); else rSel.add(c); rRedraw(); };
     });
     rLayoutHand();
     // status
     let st = '';
     if (pub.phase === 'play') {
-      if (myTurn) st = pub.step === 'draw' ? rt('drawNow') : (targets.size ? rt('tapMeld') : rt('playNow'));
+      if (myTurn) st = pub.step === 'draw' ? rt('drawNow') : revealing ? rt(pub.drewFrom === 'discard' ? 'gotFromDisc' : 'gotFromStock', cardName(drawn)) : (targets.size ? rt('tapMeld') : rt('playNow'));
       else st = rt('turnOf', UI.esc(N[pub.turn]));
     }
     if (playing && pub.drewFrom === 'discard' && pub.takenCard && hand.length > 1 && !targets.size) st += `<br><small>${rt('takenNote', cardName(pub.takenCard))}</small>`;
     rDom.status.innerHTML = hostBanner() || st;
     const L = pub.last;
-    rDom.last.textContent = !L || pub.phase !== 'play' ? '' :
+    rDom.last.textContent = !L || pub.phase !== 'play' || L.seat === mySeat ? '' :
       L.kind === 'draw' ? rt('lDraw', N[L.seat]) : L.kind === 'take' ? rt('lTake', N[L.seat], cardName(L.card)) :
       L.kind === 'meld' ? rt('lMeld', N[L.seat]) : L.kind === 'layoff' ? rt('lLayoff', N[L.seat]) : rt('lDiscard', N[L.seat], cardName(L.card));
     // actions
     const meldOk = playing && selArr.length >= 3 && !!Rummy.asMeld(selArr);
     const discOk = playing && selArr.length === 1 && !(pub.drewFrom === 'discard' && pub.takenCard === selArr[0] && hand.length > 1);
     const acts = [];
+    if (revealing) acts.push(`<button class="btn" data-a="cont">${t('cont')}</button>`);
     if (playing) {
       acts.push(`<button class="btn" data-a="meld"${meldOk ? '' : ' disabled'}>${rt('meldBtn')}</button>`);
       acts.push(`<button class="btn" data-a="disc"${discOk ? '' : ' disabled'}>${rt('discardBtn')}</button>`);
     }
     if (rSel.size) acts.push(`<button class="btn ghost" data-a="clear">${rt('clearSel')}</button>`);
-    acts.push(`<button class="btn ghost" data-a="sort">${rt(rSort === 'suit' ? 'sortRank' : 'sortSuit')}</button>`);
+    if (!revealing) acts.push(`<button class="btn ghost" data-a="sort">${rt(rSort === 'suit' ? 'sortRank' : 'sortSuit')}</button>`);
     rDom.acts.innerHTML = acts.join('');
     rDom.acts.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
       const a = b.dataset.a;
       if (a === 'sort') { rSort = rSort === 'suit' ? 'rank' : 'suit'; try { localStorage.setItem('rummy-sort', rSort); } catch (e) {} return rRedraw(); }
       if (a === 'clear') { rSel.clear(); return rRedraw(); }
+      if (a === 'cont' && drawn) { rRevealAck = pub.handNum + ':' + drawn; return rRedraw(); }
       if (a === 'meld' && meldOk) { rSel.clear(); sent = true; send({ type: 'meld', cards: selArr }); return rRedraw(); }
       if (a === 'disc' && discOk) { rSel.clear(); sent = true; send({ type: 'discard', card: selArr[0] }); return rRedraw(); }
     });
