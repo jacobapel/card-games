@@ -212,8 +212,9 @@ tr.clk:hover td{background:rgba(201,162,74,.12)}
 .rmelds{flex:1;min-height:56px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:6px 10px;align-content:flex-start;justify-content:center;padding:6px;border-radius:14px;background:rgba(0,0,0,.18)}
 .rempty{align-self:center;opacity:.6;font-size:.85rem;padding:8px}
 .rmeld{display:flex;padding:3px 3px 3px 3px;border-radius:9px;border:2px solid transparent;background:none;cursor:default}
-.rmeld .card{--sz:34px;width:34px;height:48px;flex:none}
-.rmeld .card+.card{margin-left:-16px}
+.rmelds{--mw:clamp(38px,10.5vw,46px)}
+.rmeld .card{--sz:var(--mw);width:var(--mw);height:calc(var(--mw)*1.42);flex:none}
+.rmeld .card+.card{margin-left:calc(var(--mw)*-.45)}
 .rmeld.can{border-color:var(--brass);box-shadow:0 0 14px rgba(236,212,154,.55);cursor:pointer;animation:rglow 1.4s ease-in-out infinite}
 .rmeld.edit{position:relative;align-items:center;border:2px dashed rgba(236,212,154,.3);padding:8px 4px 4px}
 .rmeld.bad{border:2px solid #e2554f;box-shadow:0 0 10px rgba(226,85,79,.45)}
@@ -225,6 +226,8 @@ tr.clk:hover td{background:rgba(201,162,74,.12)}
 @keyframes rfresh{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
 .rhand{position:relative;height:calc(var(--rcw)*1.42 + 18px);direction:ltr;flex:none}
 .rhand .card{--sz:var(--rcw);position:absolute;bottom:0;width:var(--rcw);height:calc(var(--rcw)*1.42);transition:transform .15s ease,left .2s ease;cursor:pointer;touch-action:manipulation}
+.rhand .card{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.rhand .card.drag{transition:none;transform:translateY(-12px) scale(1.06);box-shadow:0 0 0 2.5px var(--brass),0 12px 22px rgba(0,0,0,.5);z-index:99!important;cursor:grabbing}
 .rhand .card.got{transform:translateY(-22px);box-shadow:0 0 0 2.5px var(--brass),0 8px 16px rgba(0,0,0,.45);cursor:default}
 .rhand .card.sel{transform:translateY(-16px);box-shadow:0 0 0 2.5px var(--brass),0 8px 16px rgba(0,0,0,.45)}
 .rhand .card.new::after{content:"";position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--brass);box-shadow:0 0 0 2px var(--card)}
@@ -1416,7 +1419,7 @@ const RBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 6;
+  const APP_VER = 7;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -2232,6 +2235,15 @@ const RBot = (() => {
   const rt = (k, ...a) => { const v = RS[I18N.lang][k]; return typeof v === 'function' ? v(...a) : v; };
   const isRummy = () => (meta && meta.game === 'rummy') || (pub && pub.game === 'rummy');
   const cardName = c => `${Hearts.rankTxt(Rummy.rank(c))}${Hearts.SYM[Rummy.suit(c)]}`;
+  let rOrder = null, rOrderHand = -1, rDragged = false, rDragging = false, rHeld = false;
+  function rHandOrder(cards) {
+    const sorted = Rummy.sortHand(cards, rSort);
+    if (!pub || rOrderHand !== pub.handNum) rOrder = null;
+    if (!rOrder) return sorted;
+    const have = new Set(cards);
+    const kept = rOrder.filter(c => have.has(c)), ks = new Set(kept);
+    return kept.concat(sorted.filter(c => !ks.has(c)));
+  }
   let rSort = (() => { try { return localStorage.getItem('rummy-sort') || 'suit'; } catch (e) { return 'suit'; } })();
   let rRevealAck = '', rEdit = null, rShowPrev = false;
   let rSel = new Set(), rPrevHand = null, rNew = new Set(), rDom = null, rLastMeldIds = new Set(), rMeldsSeen = false;
@@ -2319,6 +2331,7 @@ const RBot = (() => {
       <div class="rinfo">${s !== mySeat ? `<span class="rcnt"><i class="back"></i>${pub.counts[s] || 0}</span>` : ''}<span class="score">${pub.scores[s]}</span></div></div>`;
   }
   function rRedraw() {
+    if (rDragging) { rHeld = true; return; }
     rMount();
     const N = names();
     if (pub.phase === 'lobby') { rDom.m.classList.add('idle'); return waitingRoom(N); }
@@ -2334,13 +2347,13 @@ const RBot = (() => {
     const canDraw = myTurn && pub.step === 'draw';
     rDom.stock.classList.toggle('can', canDraw);
     rDom.disc.classList.toggle('can', canDraw && pub.discard.length > 0);
-    rDom.stock.querySelector('.rbadge').textContent = pub.stockCount || 0;
+    rDom.stock.querySelector('.rbadge').textContent = '';
     rDom.stock.querySelector('.back').style.visibility = pub.stockCount ? 'visible' : 'hidden';
     const top = pub.discard[pub.discard.length - 1];
     rDom.disc.querySelector('.rtop').innerHTML = top ? UI.cardHTML(top) : '';
-    rDom.disc.querySelector('.rbadge').textContent = pub.discard.length || '';
+    rDom.disc.querySelector('.rbadge').textContent = '';
     // hand
-    const hand = Rummy.sortHand(myHand.cards, rSort);
+    const hand = rHandOrder(myHand.cards);
     const hs = new Set(hand);
     if (rPrevHand && pub.phase === 'play') hand.forEach(c => { if (!rPrevHand.has(c) && rPrevHand.size) rNew.add(c); });
     if (!(pub.phase === 'play' && pub.turn === mySeat)) rNew.clear();
@@ -2373,7 +2386,8 @@ const RBot = (() => {
       el.classList.toggle('got', revealing && c === drawn);
       el.classList.toggle('locked', playing && pub.drewFrom === 'discard' && pub.takenCard === c && hand.length > 1);
       el.tabIndex = 0; el.setAttribute('role', 'button');
-      el.onclick = () => { if (revealing) return; if (rSel.has(c)) rSel.delete(c); else rSel.add(c); rRedraw(); };
+      el.onclick = () => { if (rDragged || revealing) return; if (rSel.has(c)) rSel.delete(c); else rSel.add(c); rRedraw(); };
+      if (!revealing) rDragable(el, hand);
     });
     rLayoutHand();
     // status
@@ -2413,7 +2427,7 @@ const RBot = (() => {
     rDom.acts.innerHTML = acts.join('');
     rDom.acts.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
       const a = b.dataset.a;
-      if (a === 'sort') { rSort = rSort === 'suit' ? 'rank' : 'suit'; try { localStorage.setItem('rummy-sort', rSort); } catch (e) {} return rRedraw(); }
+      if (a === 'sort') { rOrder = null; rSort = rSort === 'suit' ? 'rank' : 'suit'; try { localStorage.setItem('rummy-sort', rSort); } catch (e) {} return rRedraw(); }
       if (a === 'clear') { rSel.clear(); return rRedraw(); }
       if (a === 'cont' && drawn) { rRevealAck = pub.handNum + ':' + drawn; return rRedraw(); }
       if (a === 'prev') { rShowPrev = !rShowPrev; return rRedraw(); }
@@ -2448,12 +2462,13 @@ const RBot = (() => {
       el.onclick = () => { if (E.sel.has(c)) E.sel.delete(c); else E.sel.add(c); rRedraw(); };
     });
     rDom.melds.querySelectorAll('.rplus').forEach(b => b.onclick = () => rMove(E.groups[+b.dataset.i]));
-    const hand = Rummy.sortHand(E.hand, rSort);
+    const hand = rHandOrder(E.hand);
     rDom.hand.innerHTML = hand.map(UI.cardHTML).join('');
     rDom.hand.querySelectorAll('.card').forEach(el => {
       const c = el.dataset.id;
       el.classList.toggle('sel', E.sel.has(c));
-      el.onclick = () => { if (E.sel.has(c)) E.sel.delete(c); else E.sel.add(c); rRedraw(); };
+      el.onclick = () => { if (rDragged) return; if (E.sel.has(c)) E.sel.delete(c); else E.sel.add(c); rRedraw(); };
+      rDragable(el, hand);
     });
     rLayoutHand();
     rDom.status.innerHTML = !valid ? rt('editHelp') : used ? rt('editOk') : rt('needHand');
@@ -2480,13 +2495,45 @@ const RBot = (() => {
     if (from === 'discard' && !pub.discard.length) return;
     sent = true; send({ type: 'draw', from }); rRedraw();
   }
-  function rLayoutHand() {
-    const els = [...rDom.hand.querySelectorAll('.card')];
-    if (!els.length) return;
+  function rLayoutHand(els = [...rDom.hand.querySelectorAll('.card')], skip = null) {
+    if (!els.length) return null;
     const W = rDom.hand.clientWidth, cw = els[0].offsetWidth || 56, n = els.length;
     const step = n > 1 ? Math.min(cw * 0.8, (W - cw) / (n - 1)) : 0;
     const start = (W - (cw + step * (n - 1))) / 2;
-    els.forEach((el, i) => { el.style.left = (start + i * step) + 'px'; el.style.zIndex = i + 1; });
+    els.forEach((el, i) => { if (el !== skip) { el.style.left = (start + i * step) + 'px'; el.style.zIndex = i + 1; } });
+    return { start, step, n };
+  }
+  /* drag a hand card sideways to reorder the row (a plain tap still selects) */
+  function rDragable(el, hand) {
+    el.onpointerdown = e => {
+      if (e.button > 0) return;
+      const els = [...rDom.hand.querySelectorAll('.card')];
+      const x0 = e.clientX, y0 = e.clientY, left0 = parseFloat(el.style.left) || 0;
+      let on = false, order = els, lay = null;
+      rDragged = false;
+      const move = ev => {
+        const dx = ev.clientX - x0;
+        if (!on) { if (Math.abs(dx) < 8 && Math.abs(ev.clientY - y0) < 8) return; on = true; rDragging = true; el.classList.add('drag'); }
+        const maxL = rDom.hand.clientWidth - el.offsetWidth, L = Math.max(0, Math.min(maxL, left0 + dx));
+        el.style.left = L + 'px';
+        lay = lay || rLayoutHand(els, el);
+        const rest = els.filter(x => x !== el);
+        const idx = Math.max(0, Math.min(rest.length, Math.round((L - lay.start) / (lay.step || 1))));
+        order = rest.slice(0, idx).concat(el, rest.slice(idx));
+        rLayoutHand(order, el);
+      };
+      const up = () => {
+        el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+        if (!on) return;
+        rDragging = false; rHeld = false;
+        rDragged = true; setTimeout(() => { rDragged = false; }, 50);
+        el.classList.remove('drag');
+        rOrder = order.map(x => x.dataset.id); rOrderHand = pub.handNum;
+        rRedraw();
+      };
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+    };
   }
   function rBubble(seat, e) {
     const el = rDom && rDom.m.querySelector(`.rpl[data-seat="${seat}"]`);
