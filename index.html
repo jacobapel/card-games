@@ -32,11 +32,12 @@ button{font:inherit;color:inherit;cursor:pointer}
 #app{height:100%;display:grid;grid-template-rows:auto 1fr;max-width:900px;margin:0 auto}
 
 /* header */
-.bar{display:flex;align-items:center;gap:6px;padding:8px 12px}
-.bar h1{font-family:var(--serif);font-weight:700;font-size:1.45rem;margin:0;flex:none;letter-spacing:.01em;white-space:nowrap}
+.bar{display:flex;align-items:center;gap:6px;padding:8px 10px;min-width:0}
+.bar h1{font-family:var(--serif);font-weight:700;font-size:clamp(1.02rem,5.4vw,1.45rem);margin:0;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;letter-spacing:.01em;white-space:nowrap}
 .bar h1 span:last-child{color:var(--card-red)}
-.bar .sub{font-size:.85rem;color:var(--muted);font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ibtn{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-size:.9rem;font-weight:600}
+.bar .sub{font-size:clamp(.68rem,3.1vw,.85rem);color:var(--muted);font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ibtn{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-size:.9rem;font-weight:600;white-space:nowrap;flex:none}
+@media (max-width:440px){.bar .ibtn{padding:5px 9px;font-size:clamp(.72rem,3.4vw,.85rem)}.bar{gap:4px}}
 .ibtn:focus-visible,.btn:focus-visible,.card:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
 
 /* table */
@@ -134,7 +135,7 @@ button{font:inherit;color:inherit;cursor:pointer}
   padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
 .sheet{background:var(--panel);color:var(--ink);border-radius:20px;width:min(440px,100%);max-height:100%;overflow:auto;
   padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.4);border:1px solid var(--line)}
-.sheet h2{font-family:var(--serif);font-size:1.5rem;margin:0 0 4px}
+.sheet h2{font-family:var(--serif);font-size:clamp(1.2rem,6vw,1.5rem);margin:0 0 4px}
 .sheet p{margin:.3em 0 .8em;color:var(--muted);line-height:1.5}
 .sheet .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-start;margin-top:14px}
 .sheet .btn.ghost{color:var(--ink);border-color:var(--line)}
@@ -168,6 +169,11 @@ table.sc .best{color:var(--card-red)}
 tr.clk{cursor:pointer}
 tr.clk:hover td{background:rgba(201,162,74,.12)}
 .sheet .row .btn{flex:1 1 auto}
+#toasts{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:6px;width:min(92vw,420px);pointer-events:none}
+.toast{background:#2b0a11;color:#f6ead6;border:1px solid var(--brass);border-radius:14px;padding:10px 14px;font-weight:600;font-size:.95rem;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.35);animation:tin .3s ease-out;transition:opacity .5s}
+.toast.out{opacity:0}
+@keyframes tin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
 /* rummy */
 .rtable{position:relative;margin:0 6px 6px;border-radius:28px;overflow:hidden;color:#f6ead6;min-height:0;display:flex;flex-direction:column;gap:6px;padding:10px 8px 10px;
   background:radial-gradient(ellipse 80% 60% at 50% 42%,var(--felt) 0%,var(--felt2) 100%);
@@ -1009,8 +1015,8 @@ const UI = (() => {
     modalEl.dir = I18N.dir;
     modalEl.dataset.dismiss = buttons.some(b => b.close) ? '1' : '';
     const sheet = modalEl.firstChild;
-    sheet.innerHTML = html + (buttons.length ? '<div class="row"></div>' : '');
-    const row = sheet.querySelector('.row');
+    sheet.innerHTML = html;
+    const row = buttons.length ? sheet.appendChild(Object.assign(document.createElement('div'), { className: 'row' })) : null;
     buttons.forEach(b => {
       const el = document.createElement('button');
       el.className = 'btn' + (b.ghost ? ' ghost' : ''); el.textContent = b.label; el.disabled = !!b.disabled;
@@ -1453,6 +1459,11 @@ const RBot = (() => {
   const ADMIN_EMAIL = 'pspcom@gmail.com';
   const H2 = {
     he: {
+      leftLobby: n => `${n} עזב/ה את השולחן`, leftGame: n => `${n} עזב/ה את השולחן. רובוט ממשיך במקומו/ה.`,
+      newHost: n => `${n} הוא/היא המארח/ת עכשיו`, youHost: 'אתה המארח עכשיו. המשחק ממשיך אצלך.',
+      leave: 'עזוב שולחן', leaveQ: 'לעזוב את השולחן?', leaveBtn: 'כן, לעזוב',
+      leaveLobby: 'המקום שלך בשולחן יתפנה.', leaveGame: 'המקום שלך יעבור לרובוט, והמשחק ימשיך בלעדיך.',
+      leaveHostPass: n => `${n} יהפוך למארח של השולחן.`, leaveHostClose: 'אין בשולחן שחקנים אחרים, ולכן השולחן ייסגר.',
       hostH: 'פתיחת שולחן', hostP: 'רק מארחים שמנהל המשחק אישר יכולים לפתוח שולחנות. התחבר עם חשבון ה־Google שלך כדי שנבדוק אם אתה ברשימה.',
       google: 'התחבר עם Google', loginFail: m => 'ההתחברות נכשלה: ' + m,
       emailLbl: 'כתובת מייל', badEmail: 'כתובת המייל לא תקינה.',
@@ -1477,6 +1488,11 @@ const RBot = (() => {
       online: 'מחובר', offline: 'מנותק', back: 'חזרה', err: m => 'שגיאה: ' + m,
     },
     en: {
+      leftLobby: n => `${n} left the table`, leftGame: n => `${n} left the table. A robot is playing in their place.`,
+      newHost: n => `${n} is now the host`, youHost: "You're now the host. The game continues on your device.",
+      leave: 'Leave table', leaveQ: 'Leave the table?', leaveBtn: 'Yes, leave',
+      leaveLobby: 'Your seat will be freed.', leaveGame: 'A robot will take your seat and the game will go on without you.',
+      leaveHostPass: n => `${n} will become the host.`, leaveHostClose: 'There are no other players, so the table will be closed.',
       hostH: 'Open a table', hostP: 'Only hosts approved by the game admin can open tables. Sign in with your Google account so we can check whether you are on the list.',
       google: 'Sign in with Google', loginFail: m => 'Sign-in failed: ' + m,
       emailLbl: 'Email address', badEmail: 'That email address is not valid.',
@@ -1652,7 +1668,7 @@ const RBot = (() => {
     const hosts = Object.entries(adm.hosts).sort((a, b) => (b[1].approvedAt || 0) - (a[1].approvedAt || 0));
     const rooms = Object.entries(adm.rooms).filter(([, r]) => r && r.meta).sort((a, b) => (b[1].meta.created || 0) - (a[1].meta.created || 0));
     const dayAgo = Date.now() - 864e5;
-    const old24 = rooms.filter(([, r]) => (r.meta.created || 0) < dayAgo);
+    const old24 = rooms.filter(([, r]) => (r.meta.created || 0) < dayAgo).concat(Object.entries(adm.rooms).filter(([, r]) => r && !r.meta));
     const tab = (k, label, n) => `<button class="ibtn adm-tab${adm.tab === k ? ' on' : ''}" data-tab="${k}">${label}${n ? ` <span class="adm-n">${n}</span>` : ''}</button>`;
     const btn = (act, id, label, ghost) => `<button class="btn${ghost ? ' ghost' : ''} adm-b" data-act="${act}" data-id="${UI.esc(id)}">${label}</button>`;
     let body = '';
@@ -1716,9 +1732,22 @@ const RBot = (() => {
     history.replaceState(null, '', location.pathname + '?room=' + code);
     const onRef = room.child('players/' + mySeat + '/online');
     db.ref('.info/connected').on('value', s => { if (s.val()) { onRef.onDisconnect().set(false); onRef.set(true); } });
-    room.child('meta').on('value', s => { meta = s.val(); if (!meta) return gone(); hostSetup(); maybeRebuild(); redraw(); });
+    room.child('meta').on('value', s => {
+      const prevHost = meta && meta.host;
+      meta = s.val(); if (!meta) return gone();
+      if (prevHost && meta.host !== prevHost) {
+        if (meta.host === uid) toast(h('youHost'));
+        else { const ns = players.findIndex(p => p && p.uid === meta.host); if (ns >= 0) toast(h('newHost', I18N.mapName(players[ns].name))); }
+      }
+      hostSetup(); maybeRebuild(); redraw();
+    });
+    let playersSeen = false;
     room.child('players').on('value', s => {
-      players = arr4(s.val(), null); afterPlayers(); redraw();
+      const prev = players;
+      players = arr4(s.val(), null);
+      if (playersSeen) seatChanges(prev, players);
+      playersSeen = true;
+      afterPlayers(); redraw();
       if (isHost() && g) hostStep();
     });
     room.child('state').on('value', s => { pub = normalize(s.val()); onState(); });
@@ -1730,11 +1759,12 @@ const RBot = (() => {
     room.child('react').on('child_changed', s => react(+s.key, s.val()));
     room.child('react').on('child_added', s => react(+s.key, s.val()));
   }
-  function gone() { UI.modal('gone', `<h2>${t('goneH')}</h2><p>${t('goneP')}</p>`, [{ label: t('toNewRoom'), onClick: () => { location.href = location.pathname; } }]); }
+  function gone() {
+    if (leaving) return; UI.modal('gone', `<h2>${t('goneH')}</h2><p>${t('goneP')}</p>`, [{ label: t('toNewRoom'), onClick: () => { location.href = location.pathname; } }]); }
   function react(seat, v) { if (v && Date.now() - v.t < 6000) (isRummy() ? rBubble : UI.bubble)(seat, v.e); }
   function afterPlayers() {
     const lost = mySeat >= 0 && (players[mySeat] ? players[mySeat].uid !== uid : pub && pub.phase === 'lobby');
-    if (lost && !isHost()) {
+    if (lost && !isHost() && !leaving) {
       UI.modal('kicked', `<h2>${t('kickedH')}</h2><p>${t('kickedP')}</p>`, [{ label: t('back'), onClick: () => { location.href = location.pathname; } }]);
     }
   }
@@ -1842,7 +1872,8 @@ const RBot = (() => {
       <p>${isHost() ? hostLine : t('waitHost')}</p>`,
       [{ label: t('share'), ghost: true, onClick: () => share(url) },
        ...(isHost() ? [{ label: t('startGame'), disabled: !canStart, onClick: hostStart }] : []),
-       { label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { switchLang(); redraw(); } }]);
+       { label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { switchLang(); redraw(); } },
+       { label: '🚪 ' + h('leave'), ghost: true, onClick: leaveTable }]);
     sheet.querySelectorAll('[data-bot]').forEach(b => b.onclick = () => {
       const used = new Set(players.filter(Boolean).map(p => I18N.mapName(p.name)));
       const n = I18N.botNames().find(x => !used.has(x)) || t('computer');
@@ -1902,6 +1933,7 @@ const RBot = (() => {
        { label: t('rulesBtn'), ghost: true, onClick: () => UI.modal('rules', `<h2>${t('rulesH')}</h2>` + (isRummy() ? rt('rules') : t('rules')), [{ label: t('close'), close: true }]) },
        ...(code ? [{ label: t('share'), ghost: true, onClick: () => share(location.origin + location.pathname + '?room=' + code) }] : []),
        ...(isAdmin() ? [{ label: '🛠 ' + h('adminBtn'), ghost: true, onClick: () => { UI.closeModal(); if (code) window.open(location.pathname + '?admin=1', '_blank'); else adminScreen(); } }] : []),
+       ...(code && mySeat >= 0 ? [{ label: '🚪 ' + h('leave'), ghost: true, onClick: leaveTable }] : []),
        { label: t('close'), close: true }]);
     sheet.querySelectorAll('#emo button').forEach(b => b.onclick = () => {
       room && room.child('react/' + mySeat).set({ e: b.textContent, t: Date.now() }); UI.closeModal();
@@ -1916,6 +1948,48 @@ const RBot = (() => {
     UI.modal('scores', `<h2>${t('scoresH')}</h2>` + UI.scoreTable(names(), pub.history, pub.scores, mySeat), [{ label: t('close'), close: true }]);
   }
   function showLast() { UI.modal('last', `<h2>${t('lastTrickH')}</h2>` + UI.trickHTML(pub && pub.lastTrick, names()), [{ label: t('close'), close: true }]); }
+  let leaving = false;
+  function seatChanges(prev, now) {
+    if (leaving) return;
+    for (let s = 0; s < 4; s++) {
+      const a = prev[s], b = now[s];
+      if (s === mySeat || !a || a.bot) continue;          // only real players who were here
+      const n = I18N.mapName(a.name);
+      if (!b) toast(h('leftLobby', n));
+      else if (b.bot && b.uid === a.uid) toast(h('leftGame', n));
+    }
+  }
+  function toast(msg) {
+    const el = document.createElement('div');
+    el.className = 'toast'; el.dir = I18N.dir; el.setAttribute('role', 'status'); el.textContent = msg;
+    const box = document.getElementById('toasts') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'toasts' }));
+    box.appendChild(el);
+    setTimeout(() => el.classList.add('out'), 4500);
+    setTimeout(() => el.remove(), 5000);
+  }
+  function leaveTable() {
+    if (!room || mySeat < 0) return;
+    const inGame = pub && pub.phase !== 'lobby';
+    const others = [0, 1, 2, 3].filter(s => s !== mySeat && players[s] && !players[s].bot);
+    const next = others.find(s => players[s].online !== false) ?? others[0];
+    let p = h(inGame ? 'leaveGame' : 'leaveLobby');
+    if (isHost()) p = next == null ? h('leaveHostClose') : p + ' ' + h('leaveHostPass', UI.esc(I18N.mapName(players[next].name)));
+    UI.modal('leave', `<h2>${h('leaveQ')}</h2><p>${p}</p>`, [
+      { label: h('leaveBtn'), onClick: async () => {
+        leaving = true;
+        try {
+          if (isHost() && next == null) { await room.child('meta').remove(); }
+          else {
+            const mine = room.child('players/' + mySeat);
+            if (inGame) await mine.update({ bot: true, online: true });
+            else await mine.remove();
+            if (isHost()) await room.child('meta').update({ host: players[next].uid, hostName: players[next].name, hostEmail: '' });
+          }
+        } catch (e) {}
+        location.href = location.pathname;
+      } },
+      { label: t('cancel'), ghost: true, close: true }]);
+  }
   function switchLang() { I18N.setLang(I18N.other()); UI.applyLang('titleOnline'); setHeader(); }
   function setHeader() {
     if (rDom) return rApplyLang();
