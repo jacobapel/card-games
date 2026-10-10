@@ -1419,7 +1419,7 @@ const RBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 9;
+  const APP_VER = 10;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -2350,7 +2350,7 @@ const RBot = (() => {
     rDom.me.innerHTML = plate(mySeat, N, pv, 'rmine');
     // piles
     const tk = pub.handNum + ':' + pub.turn + ':' + JSON.stringify(pub.last || null);
-    if (tk !== rTurnKey) { rTurnKey = tk; rTurnAt = pub.last ? Date.now() : 0; }
+    if (tk !== rTurnKey) { rTurnKey = tk; rTurnAt = Date.now(); }
     const wait = Math.max(0, rTurnAt + R_PASS_MS - Date.now());
     clearTimeout(rWaitT); if (wait && myTurn) rWaitT = setTimeout(rRedraw, wait + 30);
     const canDraw = myTurn && pub.step === 'draw' && !wait;
@@ -2605,7 +2605,7 @@ const RBot = (() => {
         if (g.phase !== 'play' || g.review || !isBot(s)) return;
         RBot.apply(g, s, RBot.nextAction(g, s));
         rHostStep();
-      }, g.step === 'draw' ? (g.last ? R_PASS_MS : 900) : 1100);
+      }, g.step === 'draw' ? R_PASS_MS : 1100);
     }
   }
   function rHostPublish() {
