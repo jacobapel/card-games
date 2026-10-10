@@ -244,7 +244,11 @@ tr.clk:hover td{background:rgba(201,162,74,.12)}
 .gpick input{margin-top:4px;accent-color:#8e6f2a}
 .gpick span{display:flex;flex-direction:column;gap:2px}
 .gpick small{color:var(--muted);font-size:.85rem}
-.ropts{display:flex;gap:10px}.ropts .field{flex:1}
+.ropts{display:flex;gap:10px}.ropts .field{flex:1}.ropts[hidden]{display:none}
+.gbox{border:1px solid var(--line);border-radius:14px;margin:8px 0}
+.gbox:has(input:checked){border-color:var(--brass);box-shadow:0 0 0 2px rgba(201,162,74,.35)}
+.gbox .gpick{border:0!important;margin:0;box-shadow:none!important}
+.gbox .ropts{padding:0 12px 6px}
 .field select{font:inherit;font-size:1rem;padding:9px 10px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
 @media (prefers-reduced-motion:reduce){.rpile.can,.rmeld.can{animation:none}}
 
@@ -1419,7 +1423,7 @@ const RBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 11;
+  const APP_VER = 12;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -2259,11 +2263,11 @@ const RBot = (() => {
     const opt = (n, sel) => `<option value="${n}"${n === sel ? ' selected' : ''}>${n}</option>`;
     const sheet = UI.modal('pick', `<h2>${rt('pick')}</h2>
       <label class="gpick"><input type="radio" name="gm" value="hearts" checked><span><b>♥ ${rt('hearts')}</b><small>${rt('heartsSub')}</small></span></label>
-      <label class="gpick"><input type="radio" name="gm" value="rummy"><span><b>🃏 ${rt('name')}</b><small>${rt('rummySub')}</small></span></label>
+      <div class="gbox"><label class="gpick"><input type="radio" name="gm" value="rummy"><span><b>🃏 ${rt('name')}</b><small>${rt('rummySub')}</small></span></label>
       <div class="ropts" id="ropts" hidden>
         <div class="field"><label for="rc">${rt('cardsLbl')}</label><select id="rc">${[7, 8, 9, 10].map(n => opt(n, 7)).join('')}</select></div>
         <div class="field"><label for="rtg">${rt('targetLbl')}</label><select id="rtg">${[50, 100, 200, 300].map(n => `<option value="${n}"${n === 100 ? ' selected' : ''}>${rt('pts', n)}</option>`).join('')}</select></div>
-      </div><div class="err" id="err3"></div>`,
+      </div></div><div class="err" id="err3"></div>`,
       [{ label: rt('create'), onClick: async () => {
         const game = sheet.querySelector('input[name=gm]:checked').value;
         const opts = game === 'rummy' ? { cards: +sheet.querySelector('#rc').value, target: +sheet.querySelector('#rtg').value } : null;
