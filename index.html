@@ -1419,7 +1419,7 @@ const RBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 10;
+  const APP_VER = 11;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -2179,7 +2179,7 @@ const RBot = (() => {
       needHand: 'כדי לאשר צריך להשתמש לפחות בקלף אחד מהיד.', editOk: 'הכול תקין. אפשר לאשר את הסידור.',
       reviewOther: n => `${n} סידר/ה מחדש את השולחן. אפשר לראות את המצב הקודם, ואז ללחוץ "המשך".`,
       reviewMine: 'סידרת מחדש את השולחן. השחקנים האחרים בודקים את השינוי.', reviewWait: l => `ממתינים ל: ${l}`,
-      showPrev: 'הצג מצב קודם', showNew: 'הצג מצב חדש', prevNote: 'מוצג המצב הקודם, לפני הסידור', lRearrange: n => `${n} סידר/ה מחדש את השולחן`,
+      showPrev: 'הצג מצב קודם', showNew: 'הצג מצב חדש', prevNote: 'מוצג המצב הקודם, לפני הסידור', lRearrange: n => `${n} סידר/ה מחדש את השולחן`, peekBtn: 'צפה בשולחן', backSum: 'חזרה לסיכום', peekNote: 'כך נראה השולחן בסוף הסיבוב.',
       lDraw: n => `${n} משך/ה מהקופה`, lTake: (n, c) => `${n} לקח/ה ${c} מהערימה`, lMeld: n => `${n} הוריד/ה סדרה`,
       lLayoff: n => `${n} הוסיף/ה לסדרה`, lDiscard: (n, c) => `${n} זרק/ה ${c}`,
       outYou: 'יצאת! ניצחת ביד הזו 🎉', outOther: n => `${n} יצא/ה וניצח/ה ביד`, noWinner: 'הקופה נגמרה שוב ושוב, והיד הסתיימה בלי מנצח.',
@@ -2216,7 +2216,7 @@ const RBot = (() => {
       needHand: 'To confirm you must use at least one card from your hand.', editOk: 'Everything is valid. You can confirm.',
       reviewOther: n => `${n} rearranged the table. You can look at the previous layout, then press "Continue".`,
       reviewMine: 'You rearranged the table. The other players are reviewing the change.', reviewWait: l => `Waiting for: ${l}`,
-      showPrev: 'Show previous', showNew: 'Show new', prevNote: 'Showing the table before the rearrangement', lRearrange: n => `${n} rearranged the table`,
+      showPrev: 'Show previous', showNew: 'Show new', prevNote: 'Showing the table before the rearrangement', lRearrange: n => `${n} rearranged the table`, peekBtn: 'View the table', backSum: 'Back to summary', peekNote: 'This is how the table looked at the end of the hand.',
       lDraw: n => `${n} drew from the stock`, lTake: (n, c) => `${n} took ${c} from the discard pile`, lMeld: n => `${n} laid down a meld`,
       lLayoff: n => `${n} added to a meld`, lDiscard: (n, c) => `${n} discarded ${c}`,
       outYou: 'You went out and won the hand! 🎉', outOther: n => `${n} went out and won the hand`, noWinner: 'The stock ran out again and again, so the hand ended with no winner.',
@@ -2239,6 +2239,7 @@ const RBot = (() => {
   const rt = (k, ...a) => { const v = RS[I18N.lang][k]; return typeof v === 'function' ? v(...a) : v; };
   const isRummy = () => (meta && meta.game === 'rummy') || (pub && pub.game === 'rummy');
   const cardName = c => `${Hearts.rankTxt(Rummy.rank(c))}${Hearts.SYM[Rummy.suit(c)]}`;
+  let rPeek = '';
   let rTurnKey = '', rTurnAt = 0, rWaitT = null;
   let rOrder = null, rOrderHand = -1, rDragged = false, rDragging = false, rHeld = false;
   function rHandOrder(cards) {
@@ -2401,7 +2402,9 @@ const RBot = (() => {
     rLayoutHand();
     // status
     let st = '';
-    if (reviewing) {
+    const peeking = (pub.phase === 'handEnd' || pub.phase === 'gameOver') && rPeek === pub.phase + ':' + pub.handNum;
+    if (peeking) st = rt('peekNote');
+    else if (reviewing) {
       const R0 = pub.review;
       st = (rShowPrev ? `<small>${rt('prevNote')}</small><br>` : '') + (R0.seat === mySeat ? rt('reviewMine') : rt('reviewOther', UI.esc(N[R0.seat])));
       const wait = [0, 1, 2, 3].filter(s => pub.active[s] && !R0.ack[s]).map(s => UI.esc(N[s]));
@@ -2413,7 +2416,7 @@ const RBot = (() => {
     if (playing && pub.drewFrom === 'discard' && pub.takenCard && hand.length > 1 && !targets.size) st += `<br><small>${rt('takenNote', cardName(pub.takenCard))}</small>`;
     rDom.status.innerHTML = hostBanner() || st;
     const L = pub.last;
-    rDom.last.textContent = !L || pub.phase !== 'play' || L.seat === mySeat ? '' :
+    rDom.last.textContent = !L || (!peeking && (pub.phase !== 'play' || L.seat === mySeat)) ? '' :
       L.kind === 'draw' ? rt('lDraw', N[L.seat]) : L.kind === 'take' ? rt('lTake', N[L.seat], cardName(L.card)) :
       L.kind === 'meld' ? rt('lMeld', N[L.seat]) : L.kind === 'layoff' ? rt('lLayoff', N[L.seat]) :
       L.kind === 'rearrange' ? rt('lRearrange', N[L.seat]) : rt('lDiscard', N[L.seat], cardName(L.card));
@@ -2426,6 +2429,7 @@ const RBot = (() => {
       if (!pub.review.ack[mySeat] && !sent) acts.push(`<button class="btn" data-a="rok">${t('cont')}</button>`);
     }
     if (revealing) acts.push(`<button class="btn" data-a="cont">${t('cont')}</button>`);
+    if (peeking) acts.push(`<button class="btn" data-a="unpeek">${rt('backSum')}</button>`);
     if (playing) {
       acts.push(`<button class="btn" data-a="meld"${meldOk ? '' : ' disabled'}>${rt('meldBtn')}</button>`);
       acts.push(`<button class="btn" data-a="disc"${discOk ? '' : ' disabled'}>${rt('discardBtn')}</button>`);
@@ -2438,6 +2442,7 @@ const RBot = (() => {
       const a = b.dataset.a;
       if (a === 'sort') { rOrder = null; rSort = rSort === 'suit' ? 'rank' : 'suit'; try { localStorage.setItem('rummy-sort', rSort); } catch (e) {} return rRedraw(); }
       if (a === 'clear') { rSel.clear(); return rRedraw(); }
+      if (a === 'unpeek') { rPeek = ''; return rRedraw(); }
       if (a === 'cont' && drawn) { rRevealAck = pub.handNum + ':' + drawn; return rRedraw(); }
       if (a === 'prev') { rShowPrev = !rShowPrev; return rRedraw(); }
       if (a === 'rok') { sent = true; send({ type: 'reviewOk' }); return rRedraw(); }
@@ -2560,7 +2565,9 @@ const RBot = (() => {
   }
   function rEndModal(N) {
     const ph = pub.phase;
-    if (ph !== 'handEnd' && ph !== 'gameOver') { UI.closeModal('rend'); return; }
+    if (ph !== 'handEnd' && ph !== 'gameOver') { UI.closeModal('rend'); rPeek = ''; return; }
+    const pk = ph + ':' + pub.handNum;
+    if (rPeek === pk) { UI.closeModal('rend'); return; }
     let title, line = '';
     if (ph === 'gameOver') title = pub.winners.includes(mySeat) ? rt('youWon') : rt('wonBy', pub.winners.map(i => N[i]).join(t('and')));
     else title = rt('handOver', pub.handNum + 1);
@@ -2575,6 +2582,7 @@ const RBot = (() => {
     const btns = ph === 'handEnd'
       ? [{ label: t(pub.ready[mySeat] ? 'waitOthers' : 'readyBtn'), disabled: pub.ready[mySeat], onClick: () => send({ type: 'ready' }) }]
       : (isHost() ? [{ label: t('restart'), onClick: hostRestart }] : []);
+    btns.push({ label: rt('peekBtn'), ghost: true, onClick: () => { rPeek = pk; rRedraw(); } });
     UI.modal('rend', `<h2>${UI.esc(title)}</h2>${line}
       <div class="tbl-wrap"><table class="sc"><thead><tr><th style="text-align:start">${t('colPlayer')}</th><th>${rt('colLeft')}</th><th>${rt('colPts')}</th><th>${rt('colTot')}</th></tr></thead><tbody>${rows}</tbody></table></div>
       ${ready}${ph === 'gameOver' ? rScoreTable(N, pub.history, pub.scores) + (isHost() ? '' : `<p>${t('hostCanRestart')}</p>`) : ''}`, btns);
