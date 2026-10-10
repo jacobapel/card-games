@@ -1423,7 +1423,7 @@ const RBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 12;
+  const APP_VER = 14;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -2199,6 +2199,7 @@ const RBot = (() => {
         <li>אפשר לסדר את הקלפים ביד בגרירה: מחזיקים קלף, מזיזים הצידה ועוזבים. כפתור המיון מחזיר את השורה למיון.</li>
         <li>התור נגמר בזריקת קלף לערימה. את הקלף שלקחת מהערימה אי אפשר לזרוק באותו תור.</li>
         <li>מי שנפטר מכל הקלפים יוצא ומנצח ביד. הוא מקבל את סכום הקלפים שנשארו אצל האחרים: תמונות 10, אס 1, השאר לפי המספר.</li>
+        <li>בסוף כל סיבוב מוצג סיכום. בכפתור "צפה בשולחן" אפשר לראות את השולחן כפי שנשאר, והקלפים שנוספו בתור האחרון מסומנים בנקודה זהובה. הסיבוב הבא מתחיל רק אחרי שכל השחקנים לחצו "מוכן ליד הבאה".</li>
         <li>כשהקופה נגמרת, הערימה נטרפת ונהיית קופה חדשה. המשחק נגמר כשמישהו מגיע לניקוד היעד, והגבוה מנצח.</li></ul>
         <p>במסך: מקישים על קלפים כדי לבחור אותם, ואז על "הורד סדרה", על סדרה מוארת בשולחן, או על "זרוק".</p></div>`,
     },
@@ -2236,6 +2237,7 @@ const RBot = (() => {
         <li>You can reorder the cards in your hand by dragging: hold a card, slide it sideways and let go. The sort button puts the row back in sorted order.</li>
         <li>End your turn by discarding a card. You can't discard the card you took from the discard pile on the same turn.</li>
         <li>Whoever gets rid of all their cards goes out and wins the hand, scoring the value of everyone else's cards: face cards 10, ace 1, others their number.</li>
+        <li>A summary appears at the end of each hand. "View the table" shows the table as it was left, with the cards added on the last turn marked by a gold dot. The next hand starts only after every player has pressed "Ready for next hand".</li>
         <li>When the stock runs out, the discard pile is shuffled into a new stock. The game ends when someone reaches the target score; highest wins.</li></ul>
         <p>On screen: tap cards to select them, then tap "Lay down meld", a highlighted meld on the table, or "Discard".</p></div>`,
     },
@@ -2290,6 +2292,7 @@ const RBot = (() => {
     st.scores = arr4(v.scores, 0); st.counts = arr4(v.counts, 0); st.ready = arr4(v.ready, false);
     st.handDelta = arr4(v.handDelta, 0); st.names = arr4(v.names, '');
     st.history = list(v.history).map(h => arr4(h, 0));
+    st.endNew = list(v.endNew);
     st.discard = list(v.discard);
     st.melds = list(v.melds).map(m => ({ id: m.id, type: m.type, owner: m.owner, cards: list(m.cards) }));
     st.winners = list(v.winners);
@@ -2390,6 +2393,10 @@ const RBot = (() => {
     const shown = reviewing && rShowPrev ? pub.review.prev : pub.melds;
     rDom.melds.innerHTML = shown.length ? shown.map(m => `<button class="rmeld${targets.has(m.id) ? ' can' : ''}${wasSeen && fresh.includes(m.id) ? ' fresh' : ''}" data-id="${m.id}" title="${UI.esc(N[m.owner])}">${m.cards.map(UI.cardHTML).join('')}</button>`).join('')
       : `<div class="rempty" dir="${I18N.dir}">${rt('noMelds')}</div>`;
+    if (pub.phase !== 'play' && rPeek === pub.phase + ':' + pub.handNum && pub.endNew.length) {
+      const nw = new Set(pub.endNew);
+      rDom.melds.querySelectorAll('.rmeld .card').forEach(el => el.classList.toggle('fromhand', nw.has(el.dataset.id)));
+    }
     rDom.melds.querySelectorAll('.rmeld.can').forEach(b => b.onclick = () => { const ids = [...rSel]; rSel.clear(); sent = true; send({ type: 'layoff', cards: ids, meld: +b.dataset.id }); rRedraw(); });
     // hand cards
     rDom.hand.innerHTML = hand.map(c => UI.cardHTML(c)).join('');
@@ -2607,6 +2614,7 @@ const RBot = (() => {
   }
   const R_PASS_MS = 4000;   // pause between turns so everyone sees the discard
   function rHostStep() {
+    if (g.phase === 'play' && g.step === 'draw') g.turnCards = g.melds.flatMap(m => m.cards);   // table at the start of this turn
     if (g.phase === 'handEnd') for (let s = 0; s < 4; s++) if (isBot(s) && !g.ready[s]) Rummy.setReady(g, s);
     if (g.review) for (let s = 0; s < 4; s++) if (isBot(s) && g.review && !g.review.ack[s]) Rummy.ackReview(g, s);
     rHostPublish();
@@ -2628,6 +2636,7 @@ const RBot = (() => {
       scores: g.scores, history: g.history, turn: g.turn, step: g.step, discard: g.discard, melds: g.melds, meldSeq: g.meldSeq,
       counts: g.hands.map(x => x.length), stockCount: g.stock.length, drewFrom: g.drewFrom, takenCard: g.takenCard, reshuffles: g.reshuffles,
       last: g.last, ready: g.ready, winner: g.winner, handDelta: g.handDelta, winners: g.winners, left: over ? g.hands : null, review: g.review,
+      endNew: over && g.turnCards ? g.melds.flatMap(m => m.cards).filter(c => !g.turnCards.includes(c)) : null,
     };
     const up = { state: JSON.parse(JSON.stringify(st)) };
     for (let s = 0; s < 4; s++) up['hands/' + s] = { cards: g.hands[s] };
