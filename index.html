@@ -244,6 +244,8 @@ tr.clk:hover td{background:rgba(201,162,74,.12)}
 .gpick input{margin-top:4px;accent-color:#8e6f2a}
 .gpick span{display:flex;flex-direction:column;gap:2px}
 .gpick small{color:var(--muted);font-size:.85rem}
+.rtabs{display:flex;gap:8px;margin:0 0 10px}.rtabs .btn{flex:1;padding:8px 10px}
+.glink{align-self:flex-start;margin-inline-start:auto;background:none;border:0;color:#8e6f2a;text-decoration:underline;font:inherit;font-size:.85rem;padding:2px 4px;cursor:pointer}
 .ropts{display:flex;gap:10px}.ropts .field{flex:1}.ropts[hidden]{display:none}
 .gbox{border:1px solid var(--line);border-radius:14px;margin:8px 0}
 .gbox:has(input:checked){border-color:var(--brass);box-shadow:0 0 0 2px rgba(201,162,74,.35)}
@@ -1423,7 +1425,7 @@ const RBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 14;
+  const APP_VER = 15;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -1479,6 +1481,9 @@ const RBot = (() => {
       <p class="adm-sub" id="hoststat">${hostStatusHTML()}</p>`,
       [{ label: t(urlCode ? 'joinRoom' : 'createRoom'), onClick: () => go(urlCode ? 'join' : 'create') },
        { label: t(urlCode ? 'createRoom' : 'joinRoom'), ghost: true, onClick: () => go(urlCode ? 'create' : 'join') },
+       { label: '📖 ' + t('rulesBtn'), ghost: true, onClick: () => {
+         const nm = document.getElementById('nm').value, cd = document.getElementById('cd').value;
+         showRules('hearts', () => { lobby(); document.getElementById('nm').value = nm; document.getElementById('cd').value = cd; }); } },
        { label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => {
          const nm = document.getElementById('nm').value, cd = document.getElementById('cd').value;
          switchLang(); lobby(); document.getElementById('nm').value = nm; document.getElementById('cd').value = cd; } },
@@ -1802,8 +1807,19 @@ const RBot = (() => {
   }
 
   /* ---------- in room ---------- */
+  function helpButton() {
+    let b = document.getElementById('bHelp');
+    if (!b) {
+      const m = document.getElementById('bMenu'); if (!m) return;
+      b = Object.assign(document.createElement('button'), { className: 'ibtn', id: 'bHelp', textContent: '?' });
+      b.setAttribute('aria-label', t('rulesBtn'));
+      b.onclick = () => showRules(isRummy() ? 'rummy' : 'hearts', null);
+      m.before(b);
+    }
+  }
   function enter() {
     UI.closeModal('lobby');
+    helpButton();
     history.replaceState(null, '', location.pathname + '?room=' + code);
     const onRef = room.child('players/' + mySeat + '/online');
     room.child('players/' + mySeat + '/ver').set(APP_VER).catch(() => {});
@@ -1930,6 +1946,7 @@ const RBot = (() => {
     return '';
   }
   function waitingRoom(N) {
+    if (UI.currentModal() === 'rules') return;   // don't yank the rules away while someone reads them
     const url = location.origin + location.pathname + '?room=' + code;
     const rows = [0, 1, 2, 3].map(s => {
       const p = players[s];
@@ -1948,6 +1965,7 @@ const RBot = (() => {
       <p>${isHost() ? hostLine : t('waitHost')}</p>`,
       [{ label: t('share'), ghost: true, onClick: () => share(url) },
        ...(isHost() ? [{ label: t('startGame'), disabled: !canStart, onClick: hostStart }] : []),
+       { label: '📖 ' + t('rulesBtn'), ghost: true, onClick: () => showRules(isRummy() ? 'rummy' : 'hearts', null) },
        { label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { switchLang(); redraw(); } },
        { label: '🚪 ' + h('leave'), ghost: true, onClick: leaveTable }]);
     sheet.querySelectorAll('[data-bot]').forEach(b => b.onclick = () => {
@@ -2006,7 +2024,7 @@ const RBot = (() => {
       ${offline.length ? `<p>${t('offlineToBot')}</p>${offline.map(s => `<button class="btn ghost" data-tobot="${s}" style="margin:4px 0">${t('toBot', UI.esc(N[s]))}</button>`).join('')}` : ''}
       <p style="margin-top:14px">${t('codeIs')} <b dir="ltr">${code || ''}</b></p>`,
       [{ label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { UI.closeModal(); switchLang(); redraw(); } },
-       { label: t('rulesBtn'), ghost: true, onClick: () => UI.modal('rules', `<h2>${t('rulesH')}</h2>` + (isRummy() ? rt('rules') : t('rules')), [{ label: t('close'), close: true }]) },
+       { label: t('rulesBtn'), ghost: true, onClick: () => showRules(isRummy() ? 'rummy' : 'hearts', null) },
        ...(code ? [{ label: t('share'), ghost: true, onClick: () => share(location.origin + location.pathname + '?room=' + code) }] : []),
        ...(isAdmin() ? [{ label: '🛠 ' + h('adminBtn'), ghost: true, onClick: () => { UI.closeModal(); if (code) window.open(location.pathname + '?admin=1', '_blank'); else adminScreen(); } }] : []),
        ...(code && mySeat >= 0 ? [{ label: '🚪 ' + h('leave'), ghost: true, onClick: leaveTable }] : []),
@@ -2261,11 +2279,18 @@ const RBot = (() => {
   let rSel = new Set(), rPrevHand = null, rNew = new Set(), rDom = null, rLastMeldIds = new Set(), rMeldsSeen = false;
 
   /* ---- choosing the game when opening a table ---- */
-  function chooseGame(name) {
+  function showRules(which, onBack) {
+    const sheet = UI.modal('rules', `<h2>${t('rulesH')}</h2>
+      <div class="rtabs"><button class="btn${which === 'hearts' ? '' : ' ghost'}" data-g="hearts">♥ ${rt('hearts')}</button><button class="btn${which === 'rummy' ? '' : ' ghost'}" data-g="rummy">🃏 ${rt('name')}</button></div>
+      ${which === 'rummy' ? rt('rules') : t('rules')}`,
+      [{ label: onBack ? t('back') : t('close'), onClick: () => { if (onBack) onBack(); else { UI.closeModal('rules'); redraw(); } } }]);
+    sheet.querySelectorAll('[data-g]').forEach(b => b.onclick = () => showRules(b.dataset.g, onBack));
+  }
+  function chooseGame(name, pre = {}) {
     const opt = (n, sel) => `<option value="${n}"${n === sel ? ' selected' : ''}>${n}</option>`;
     const sheet = UI.modal('pick', `<h2>${rt('pick')}</h2>
-      <label class="gpick"><input type="radio" name="gm" value="hearts" checked><span><b>♥ ${rt('hearts')}</b><small>${rt('heartsSub')}</small></span></label>
-      <div class="gbox"><label class="gpick"><input type="radio" name="gm" value="rummy"><span><b>🃏 ${rt('name')}</b><small>${rt('rummySub')}</small></span></label>
+      <label class="gpick"><input type="radio" name="gm" value="hearts" checked><span><b>♥ ${rt('hearts')}</b><small>${rt('heartsSub')}</small></span><button type="button" class="glink" data-rules="hearts">${t('rulesH')}</button></label>
+      <div class="gbox"><label class="gpick"><input type="radio" name="gm" value="rummy"><span><b>🃏 ${rt('name')}</b><small>${rt('rummySub')}</small></span><button type="button" class="glink" data-rules="rummy">${t('rulesH')}</button></label>
       <div class="ropts" id="ropts" hidden>
         <div class="field"><label for="rc">${rt('cardsLbl')}</label><select id="rc">${[7, 8, 9, 10].map(n => opt(n, 7)).join('')}</select></div>
         <div class="field"><label for="rtg">${rt('targetLbl')}</label><select id="rtg">${[50, 100, 200, 300].map(n => `<option value="${n}"${n === 100 ? ' selected' : ''}>${rt('pts', n)}</option>`).join('')}</select></div>
@@ -2275,7 +2300,14 @@ const RBot = (() => {
         const opts = game === 'rummy' ? { cards: +sheet.querySelector('#rc').value, target: +sheet.querySelector('#rtg').value } : null;
         try { await createRoom(name, game, opts); } catch (e) { sheet.querySelector('#err3').textContent = e.message || String(e); }
       } }, { label: t('cancel'), ghost: true, onClick: () => lobby() }]);
-    sheet.querySelectorAll('input[name=gm]').forEach(r => r.onchange = () => { sheet.querySelector('#ropts').hidden = sheet.querySelector('input[name=gm]:checked').value !== 'rummy'; });
+    const syncOpts = () => { sheet.querySelector('#ropts').hidden = sheet.querySelector('input[name=gm]:checked').value !== 'rummy'; };
+    sheet.querySelectorAll('input[name=gm]').forEach(r => r.onchange = syncOpts);
+    if (pre.game) { sheet.querySelector(`input[value=${pre.game}]`).checked = true; sheet.querySelector('#rc').value = pre.cards; sheet.querySelector('#rtg').value = pre.target; syncOpts(); }
+    sheet.querySelectorAll('[data-rules]').forEach(b => b.onclick = e => {
+      e.preventDefault(); e.stopPropagation();
+      const st = { game: sheet.querySelector('input[name=gm]:checked').value, cards: sheet.querySelector('#rc').value, target: sheet.querySelector('#rtg').value };
+      showRules(b.dataset.rules, () => chooseGame(name, st));
+    });
   }
   function gameLabel() {
     if (!isRummy()) return '♥ ' + rt('hearts');
