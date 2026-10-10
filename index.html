@@ -1425,7 +1425,7 @@ const RBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 15;
+  const APP_VER = 16;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -1807,19 +1807,8 @@ const RBot = (() => {
   }
 
   /* ---------- in room ---------- */
-  function helpButton() {
-    let b = document.getElementById('bHelp');
-    if (!b) {
-      const m = document.getElementById('bMenu'); if (!m) return;
-      b = Object.assign(document.createElement('button'), { className: 'ibtn', id: 'bHelp', textContent: '?' });
-      b.setAttribute('aria-label', t('rulesBtn'));
-      b.onclick = () => showRules(isRummy() ? 'rummy' : 'hearts', null);
-      m.before(b);
-    }
-  }
   function enter() {
     UI.closeModal('lobby');
-    helpButton();
     history.replaceState(null, '', location.pathname + '?room=' + code);
     const onRef = room.child('players/' + mySeat + '/online');
     room.child('players/' + mySeat + '/ver').set(APP_VER).catch(() => {});
