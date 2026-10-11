@@ -248,6 +248,8 @@ tr.clk:hover td{background:rgba(201,162,74,.12)}
 .glink{align-self:flex-start;margin-inline-start:auto;background:none;border:0;color:#8e6f2a;text-decoration:underline;font:inherit;font-size:.85rem;padding:2px 4px;cursor:pointer}
 .ropts{display:flex;gap:10px}
 #wopts{flex-wrap:wrap;align-items:flex-end}#wopts .field{flex:1 1 28%;min-width:0}#wopts input{width:100%;min-width:0;box-sizing:border-box}#wopts label{font-size:.8rem}
+.wsym{font-size:1.6em;line-height:1;vertical-align:-.12em;font-weight:700;color:#f6ead6}.wsym.red{color:#ff6b6b}
+.tag .wsym{font-size:1.45em}#sub .wsym{font-size:1.9em;color:var(--ink);margin-inline-start:4px}#sub .wsym.red{color:#c0392b}
 .wdecl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px auto 0;max-width:330px;pointer-events:auto}
 .wdecl .btn{padding:9px 6px;font-size:1rem;min-width:0}.ropts .field{flex:1}.ropts[hidden]{display:none}
 .gbox{border:1px solid var(--line);border-radius:14px;margin:8px 0}
@@ -1582,7 +1584,7 @@ const WBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 18;
+  const APP_VER = 19;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -2990,6 +2992,8 @@ const WBot = (() => {
   const isWhist = () => (meta && meta.game === 'whist') || (pub && pub.game === 'whist');
   const wOpt = o => (o ? WS[I18N.lang].opt[o] : '');
   const wShort = o => (o ? WS[I18N.lang].optShort[o] : '');
+  const wSym = o => (!o ? '' : o === 'N' ? `<b>${wShort(o)}</b>` : `<span class="wsym${o === 'H' || o === 'D' ? ' red' : ''}">${wShort(o)}</span>`);
+  const wOptBig = o => (!o ? '' : o === 'N' ? wOpt(o) : wSym(o) + ' ' + wOpt(o).replace(/^\S+\s/, ''));
 
   function wnorm(v) {
     v = v || {};
@@ -3024,7 +3028,7 @@ const WBot = (() => {
     const pv = playersView(N, {});
     const tags = [0, 1, 2, 3].map(s => {
       const out = [];
-      if (s === pub.declarer && pub.trump) out.push(`<span class="tag ok">${UI.esc(wt('declTag', wShort(pub.trump)))}</span>`);
+      if (s === pub.declarer && pub.trump) out.push(`<span class="tag ok">${wt('declTag', wSym(pub.trump))}</span>`);
       if (pub.phase !== 'declare') out.push(`<span class="tag pts">${UI.esc(wt('tricks', pub.taken[s]))}</span>`);
       return out.join('');
     });
@@ -3033,13 +3037,13 @@ const WBot = (() => {
       ? wt('chooseTrump') + `<div class="wdecl">${Whist.OPTS.map(o => `<button class="btn" data-decl="${o}"${Whist.available({ used: pub.used }, mySeat).includes(o) ? '' : ' disabled'}>${wOpt(o)}</button>`).join('')}</div>`
       : wt('choosing', UI.esc(N[pub.declarer]));
     else if (pub.phase === 'playing' && !pub.trick.length) {
-      status = wt('trumpIs', wOpt(pub.trump), UI.esc(N[pub.declarer]));
+      status = wt('trumpIs', wOptBig(pub.trump), UI.esc(N[pub.declarer]));
       if (myTurn) status += '<br>' + (armed ? wt('tapAgain') : wt('yourLead')) + (pub.tricksPlayed === 0 && pub.trump !== 'N' ? `<br><small>${wt('noLeadTrump')}</small>` : '');
       else if (pub.turn >= 0) status += '<br>' + wt('turnOf', UI.esc(N[pub.turn]));
     }
     const actions = pub.phase === 'playing' || pub.phase === 'trickEnd' || declaring ? [{ key: 'decls', label: wt('declBtn'), ghost: true }] : [];
     UI.render({
-      mySeat, sub: t('roomHand', code, pub.handNum + 1) + (pub.trump ? ' · ' + wShort(pub.trump) : ''),
+      mySeat, sub: t('roomHand', code, pub.handNum + 1),
       players: pv, scores: pub.scores, counts: pub.counts, tags,
       phase: pub.phase, turn: declaring ? pub.declarer : pub.turn,
       trick: pub.trick, trickWinner: pub.trickWinner,
@@ -3048,6 +3052,7 @@ const WBot = (() => {
       status: hostBanner() || status,
       actions,
     });
+    const sb = document.getElementById('sub'); if (sb && pub.trump) sb.insertAdjacentHTML('beforeend', ' ' + wSym(pub.trump));
     wEndModal(N);
   }
   document.addEventListener('click', e => {
