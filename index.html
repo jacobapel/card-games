@@ -246,7 +246,10 @@ tr.clk:hover td{background:rgba(201,162,74,.12)}
 .gpick small{color:var(--muted);font-size:.85rem}
 .rtabs{display:flex;gap:8px;margin:0 0 10px}.rtabs .btn{flex:1;padding:8px 10px}
 .glink{align-self:flex-start;margin-inline-start:auto;background:none;border:0;color:#8e6f2a;text-decoration:underline;font:inherit;font-size:.85rem;padding:2px 4px;cursor:pointer}
-.ropts{display:flex;gap:10px}.ropts .field{flex:1}.ropts[hidden]{display:none}
+.ropts{display:flex;gap:10px}
+#wopts{flex-wrap:wrap;align-items:flex-end}#wopts .field{flex:1 1 28%;min-width:0}#wopts input{width:100%;min-width:0;box-sizing:border-box}#wopts label{font-size:.8rem}
+.wdecl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px auto 0;max-width:330px;pointer-events:auto}
+.wdecl .btn{padding:9px 6px;font-size:1rem;min-width:0}.ropts .field{flex:1}.ropts[hidden]{display:none}
 .gbox{border:1px solid var(--line);border-radius:14px;margin:8px 0}
 .gbox:has(input:checked){border-color:var(--brass);box-shadow:0 0 0 2px rgba(201,162,74,.35)}
 .gbox .gpick{border:0!important;margin:0;box-shadow:none!important}
@@ -914,6 +917,7 @@ const UI = (() => {
       const tags = [];
       if (v.taken && v.taken[s]) tags.push(`<span class="tag pts">♥ ${v.taken[s]}</span>`);
       if (v.phase === 'passing' && v.passDone && v.passDone[s]) tags.push(`<span class="tag ok">${I18N.t('tagPassed')}</span>`);
+      if (v.tags && v.tags[s]) tags.push(v.tags[s]);
       if (p.online === false && !p.bot) tags.push(`<span class="tag off">${I18N.t('tagOffline')}</span>`);
       el.querySelector('.tags').innerHTML = tags.join('');
       const st = el.querySelector('.stack');
@@ -1405,6 +1409,159 @@ const RBot = (() => {
   return { nextAction, apply, bestMelds, candidates };
 })();
 
+/* ===== Whist engine (pure logic) ===== */
+const Whist = (() => {
+  const OPTS = ['S', 'H', 'D', 'C', 'N'];          // four trump suits or no trump
+  const suit = c => c[0];
+  const rank = c => +c.slice(1);
+  const act = () => [true, true, true, true];
+  function newGame(names, opts = {}) {
+    const num = (v, d, lo, hi) => { v = Math.round(+v); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+    return {
+      game: 'whist', names: names.slice(), target: num(opts.target, 100, 1, 9999), bonus: num(opts.bonus, 13, 0, 999), penalty: num(opts.penalty, 3, 0, 999),
+      scores: [0, 0, 0, 0], history: [], handNum: -1, first: Math.floor(Math.random() * 4), used: [[], [], [], []], seq: 0,
+      ready: [true, true, true, true], winners: null,
+    };
+  }
+  function startHand(g) {
+    g.handNum++;
+    g.hands = Hearts.deal();
+    g.declarer = (g.first + g.handNum) % 4;
+    g.trump = null; g.phase = 'declare'; g.turn = g.declarer;
+    g.trick = []; g.trickWinner = null; g.lastTrick = null; g.tricksPlayed = 0; g.taken = [0, 0, 0, 0]; g.played = [];
+    g.leader = (g.declarer + 1) % 4; g.handDelta = null; g.ready = [false, false, false, false];
+  }
+  // options this player may still declare in the current cycle of five
+  const available = (g, seat) => (g.used[seat].length >= 5 ? OPTS.slice() : OPTS.filter(o => !g.used[seat].includes(o)));
+  function declare(g, seat, opt) {
+    if (g.phase !== 'declare' || seat !== g.declarer || !available(g, seat).includes(opt)) return false;
+    if (g.used[seat].length >= 5) g.used[seat] = [];
+    g.used[seat].push(opt);
+    g.trump = opt; g.phase = 'playing'; g.turn = g.leader;
+    return true;
+  }
+  function legalPlays(hand, trick, trump, tricksPlayed) {
+    if (!hand.length) return [];
+    if (!trick.length) {
+      if (tricksPlayed === 0 && trump !== 'N') { const non = hand.filter(c => suit(c) !== trump); if (non.length) return non; }
+      return hand.slice();
+    }
+    const led = suit(trick[0].card), follow = hand.filter(c => suit(c) === led);
+    return follow.length ? follow : hand.slice();
+  }
+  // seat of the card currently winning the trick
+  function winnerOf(trick, trump) {
+    let best = trick[0];
+    for (const x of trick.slice(1)) {
+      const bt = suit(best.card) === trump, xt = suit(x.card) === trump;
+      if (xt && !bt) best = x;
+      else if (suit(x.card) === suit(best.card) && rank(x.card) > rank(best.card)) best = x;
+    }
+    return best.seat;
+  }
+  function playCard(g, seat, card) {
+    if (g.phase !== 'playing' || g.turn !== seat) return false;
+    if (!legalPlays(g.hands[seat], g.trick, g.trump, g.tricksPlayed).includes(card)) return false;
+    g.hands[seat] = g.hands[seat].filter(c => c !== card);
+    g.trick.push({ seat, card }); g.played.push(card);
+    if (g.trick.length === 4) { g.trickWinner = winnerOf(g.trick, g.trump); g.phase = 'trickEnd'; g.turn = -1; }
+    else g.turn = (seat + 1) % 4;
+    return true;
+  }
+  function collectTrick(g) {
+    if (g.phase !== 'trickEnd') return false;
+    const w = g.trickWinner;
+    g.taken[w]++; g.tricksPlayed++;
+    g.lastTrick = { cards: g.trick.slice(), winner: w };
+    g.trick = []; g.trickWinner = null; g.leader = w; g.turn = w; g.phase = 'playing';
+    if (g.tricksPlayed === 13) endHand(g);
+    return true;
+  }
+  function endHand(g) {
+    const delta = g.taken.map(k => k + (k === 13 ? g.bonus : 0) - (k === 0 ? g.penalty : 0));
+    g.scores = g.scores.map((s, i) => s + delta[i]);
+    g.handDelta = delta;
+    g.history.push({ d: g.declarer, t: g.trump, k: g.taken.slice(), p: delta });
+    g.turn = -1;
+    const top = Math.max(...g.scores);
+    if (top >= g.target) { g.winners = [0, 1, 2, 3].filter(i => g.scores[i] === top); g.phase = 'gameOver'; }
+    else { g.phase = 'handEnd'; g.ready = [false, false, false, false]; }
+  }
+  function setReady(g, seat) {
+    if (g.phase !== 'handEnd') return false;
+    g.ready[seat] = true;
+    if (g.ready.every(Boolean)) startHand(g);
+    return true;
+  }
+  return { OPTS, suit, rank, newGame, startHand, available, declare, legalPlays, winnerOf, playCard, collectTrick, setReady };
+})();
+
+/* ===== Whist computer player ===== */
+const WBot = (() => {
+  const { suit, rank } = Whist;
+  const HON = { 14: 1.6, 13: 1, 12: .5, 11: .2 };
+  function chooseDeclare(g, seat) {
+    const hand = g.hands[seat], opts = Whist.available(g, seat);
+    const score = o => {
+      if (o === 'N') {
+        let v = -1.5;
+        for (const c of hand) v += rank(c) === 14 ? 1.4 : rank(c) === 13 ? .7 : 0;
+        const lens = ['S', 'H', 'D', 'C'].map(s => hand.filter(c => suit(c) === s).length);
+        if (Math.min(...lens) === 0) v -= 1.5;
+        return v;
+      }
+      const mine = hand.filter(c => suit(c) === o);
+      let v = mine.length * 1.1;
+      for (const c of mine) v += HON[rank(c)] || 0;
+      for (const c of hand) if (suit(c) !== o && rank(c) === 14) v += .6;
+      return v;
+    };
+    return opts.slice().sort((a, b) => score(b) - score(a))[0];
+  }
+  // is this card the highest of its suit still out (not yet played)?
+  const isTop = (g, c, hand) => {
+    for (let r = rank(c) + 1; r <= 14; r++) { const x = suit(c) + r; if (!g.played.includes(x) && !hand.includes(x)) return false; }
+    return true;
+  };
+  const low = cs => cs.slice().sort((a, b) => rank(a) - rank(b))[0];
+  const high = cs => cs.slice().sort((a, b) => rank(b) - rank(a))[0];
+  function choosePlay(g, seat) {
+    const hand = g.hands[seat], T = g.trump;
+    const legal = Whist.legalPlays(hand, g.trick, T, g.tricksPlayed);
+    if (legal.length === 1) return legal[0];
+    if (!g.trick.length) {
+      const tops = legal.filter(c => isTop(g, c, hand));
+      const sideTops = tops.filter(c => suit(c) !== T);
+      if (sideTops.length) return high(sideTops);
+      if (tops.length) return high(tops);
+      // otherwise lead low from the longest non-trump suit
+      const bySuit = s => legal.filter(c => suit(c) === s);
+      const suits = ['S', 'H', 'D', 'C'].filter(s => s !== T && bySuit(s).length);
+      if (suits.length) return low(bySuit(suits.sort((a, b) => bySuit(b).length - bySuit(a).length)[0]));
+      return low(legal);
+    }
+    const led = suit(g.trick[0].card);
+    const w = Whist.winnerOf(g.trick, T);
+    const wc = g.trick.find(x => x.seat === w).card;
+    const last = g.trick.length === 3;
+    const beats = c => Whist.winnerOf(g.trick.concat({ seat, card: c }), T) === seat;
+    const winners = legal.filter(beats);
+    if (suit(legal[0]) === led && legal.every(c => suit(c) === led)) {
+      if (!winners.length) return low(legal);
+      if (last) return low(winners);
+      const safe = winners.filter(c => isTop(g, c, hand));
+      if (safe.length && suit(wc) !== T) return low(safe);
+      return suit(wc) === T ? low(legal) : low(winners.length && rank(high(winners)) >= 12 ? [high(winners)] : legal);
+    }
+    // void in the led suit
+    const trumps = winners.filter(c => suit(c) === T);
+    if (trumps.length) return low(trumps);
+    const side = legal.filter(c => suit(c) !== T);
+    return low(side.length ? side : legal);
+  }
+  return { chooseDeclare, choosePlay };
+})();
+
 /* ===== Version 2: online table, each player on their own device ===== */
 (() => {
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1425,7 +1582,7 @@ const RBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 16;
+  const APP_VER = 17;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -1772,7 +1929,7 @@ const RBot = (() => {
           const seats = ps.map(p => !p ? `<span class="adm-seat empty">—</span>` :
             `<span class="adm-seat"><i class="dot ${p.bot || p.online !== false ? 'on' : ''}"></i>${p.bot ? '🤖 ' : ''}${UI.esc(I18N.mapName(p.name || '?'))}</span>`).join('');
           const sc = st.scores ? ` · ${arr4(st.scores, 0).join(' / ')}` : '';
-          return `<div class="adm-card">${r.meta.game === 'rummy' ? '🃏' : '♥'} <b dir="ltr">${UI.esc(c)}</b> · ${UI.esc(phase)}${sc}
+          return `<div class="adm-card">${r.meta.game === 'rummy' ? '🃏' : r.meta.game === 'whist' ? '♠' : '♥'} <b dir="ltr">${UI.esc(c)}</b> · ${UI.esc(phase)}${sc}
             <div class="adm-sub">${h('host')}: ${UI.esc(r.meta.hostName || (ps[0] && ps[0].name) || '?')}${r.meta.hostEmail ? ` <bdi dir="ltr">(${UI.esc(r.meta.hostEmail)})</bdi>` : ''} · ${h('opened')} ${fmtTime(r.meta.created)}</div>
             <div class="adm-seats">${seats}</div><div class="adm-row">${btn('close', c, h('closeRoom'), true)}</div></div>`;
         }).join('') : `<p>${h('noRooms')}</p>`);
@@ -1851,6 +2008,7 @@ const RBot = (() => {
   }
   function normalize(v) {
     if ((v && v.game === 'rummy') || (meta && meta.game === 'rummy')) return rnorm(v);
+    if ((v && v.game === 'whist') || (meta && meta.game === 'whist')) return wnorm(v);
     if (!v) return { phase: 'lobby' };
     const st = Object.assign({}, v);
     st.scores = arr4(v.scores, 0); st.taken = arr4(v.taken, 0); st.counts = arr4(v.counts, 0);
@@ -1885,6 +2043,7 @@ const RBot = (() => {
   function redraw() {
     if (!pub || mySeat < 0) return;
     if (isRummy()) return rRedraw();
+    if (isWhist()) return wRedraw();
     setHeader();
     const N = names();
     if (pub.phase === 'lobby') { UI.render(Object.assign(emptyView(), { mySeat, players: playersView(N, {}) })); return waitingRoom(N); }
@@ -1954,7 +2113,7 @@ const RBot = (() => {
       <p>${isHost() ? hostLine : t('waitHost')}</p>`,
       [{ label: t('share'), ghost: true, onClick: () => share(url) },
        ...(isHost() ? [{ label: t('startGame'), disabled: !canStart, onClick: hostStart }] : []),
-       { label: '📖 ' + t('rulesBtn'), ghost: true, onClick: () => showRules(isRummy() ? 'rummy' : 'hearts', null) },
+       { label: '📖 ' + t('rulesBtn'), ghost: true, onClick: () => showRules(curGame(), null) },
        { label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { switchLang(); redraw(); } },
        { label: '🚪 ' + h('leave'), ghost: true, onClick: leaveTable }]);
     sheet.querySelectorAll('[data-bot]').forEach(b => b.onclick = () => {
@@ -1965,7 +2124,7 @@ const RBot = (() => {
     sheet.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => room.child('players/' + b.dataset.rm).remove());
   }
   async function share(url) {
-    if (navigator.share) { try { await navigator.share({ title: t('titleOnline'), text: I18N.lang === 'he' ? `בוא/י לשחק איתי ${isRummy() ? rt('name') : rt('hearts')}` : `Come play ${isRummy() ? rt('name') : rt('hearts')} with me`, url }); return; } catch (e) {} }
+    if (navigator.share) { try { await navigator.share({ title: t('titleOnline'), text: I18N.lang === 'he' ? `בוא/י לשחק איתי ${gameName(curGame())}` : `Come play ${gameName(curGame())} with me`, url }); return; } catch (e) {} }
     try { await navigator.clipboard.writeText(url); (isRummy() ? rBubble : UI.bubble)(mySeat, '📋'); } catch (e) { prompt(t('copyLink'), url); }
   }
   function endModal(N) {
@@ -1987,6 +2146,7 @@ const RBot = (() => {
   function send(a) { sentSeq = (pub && pub.seq) || 0; return room.child('actions/' + mySeat).set(Object.assign({ t: TS() }, a)); }
   function onCard(id) {
     if (!pub) return;
+    if (isWhist()) return wOnCard(id);
     if (pub.phase === 'passing' && !pub.passDone[mySeat] && !sent) {
       if (sel.has(id)) sel.delete(id); else if (sel.size < 3) sel.add(id);
       return redraw();
@@ -1999,6 +2159,7 @@ const RBot = (() => {
     }
   }
   function onAction(k) {
+    if (isWhist()) return wOnAction(k);
     if (k === 'pass' && sel.size === 3 && !sent) { sent = true; send({ type: 'pass', cards: [...sel] }); redraw(); }
     if (k === 'revealOk' && pub) { revealAck = pub.handNum; redraw(); }
     if (k === 'claimOk' && pub && !sent) { sent = true; send({ type: 'claimOk' }); redraw(); }
@@ -2013,7 +2174,7 @@ const RBot = (() => {
       ${offline.length ? `<p>${t('offlineToBot')}</p>${offline.map(s => `<button class="btn ghost" data-tobot="${s}" style="margin:4px 0">${t('toBot', UI.esc(N[s]))}</button>`).join('')}` : ''}
       <p style="margin-top:14px">${t('codeIs')} <b dir="ltr">${code || ''}</b></p>`,
       [{ label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { UI.closeModal(); switchLang(); redraw(); } },
-       { label: t('rulesBtn'), ghost: true, onClick: () => showRules(isRummy() ? 'rummy' : 'hearts', null) },
+       { label: t('rulesBtn'), ghost: true, onClick: () => showRules(curGame(), null) },
        ...(code ? [{ label: t('share'), ghost: true, onClick: () => share(location.origin + location.pathname + '?room=' + code) }] : []),
        ...(isAdmin() ? [{ label: '🛠 ' + h('adminBtn'), ghost: true, onClick: () => { UI.closeModal(); if (code) window.open(location.pathname + '?admin=1', '_blank'); else adminScreen(); } }] : []),
        ...(code && mySeat >= 0 ? [{ label: '🚪 ' + h('leave'), ghost: true, onClick: leaveTable }] : []),
@@ -2026,6 +2187,7 @@ const RBot = (() => {
     });
   }
   function showScores() {
+    if (isWhist()) return wShowScores();
     if (isRummy() && pub && pub.history && pub.history.length) return UI.modal('scores', `<h2>${t('scoresH')}</h2>` + rScoreTable(names(), pub.history, pub.scores), [{ label: t('close'), close: true }]);
     if (!pub || !pub.history || !pub.history.length) return UI.modal('scores', `<h2>${t('scoresH')}</h2><p>${t('noHands')}</p>`, [{ label: t('close'), close: true }]);
     UI.modal('scores', `<h2>${t('scoresH')}</h2>` + UI.scoreTable(names(), pub.history, pub.scores, mySeat), [{ label: t('close'), close: true }]);
@@ -2078,8 +2240,8 @@ const RBot = (() => {
     if (rDom) return rApplyLang();
     const ttl = document.getElementById('ttl'); if (!ttl) return;
     const ic = ttl.nextElementSibling, inRoom = !!code && mySeat >= 0;
-    ttl.textContent = inRoom ? t('title') : t('titleOnline');
-    if (ic) ic.textContent = inRoom ? '♥' : '♠♥';
+    ttl.textContent = inRoom ? (isWhist() ? wt('name') : t('title')) : t('titleOnline');
+    if (ic) { ic.textContent = inRoom ? (isWhist() ? '♠' : '♥') : '♠♥'; ic.style.color = inRoom && isWhist() ? 'var(--ink)' : ''; }
   }
 
   /* ---------- host: runs the game for the whole table ---------- */
@@ -2094,15 +2256,17 @@ const RBot = (() => {
     if (isRummy() ? players.filter(Boolean).length < 2 : !players.every(Boolean)) return;
     UI.closeModal('waiting');
     if (isRummy()) return rHostNew();
+    if (isWhist()) return wHostNew();
     g = Hearts.newGame(names()); Hearts.startHand(g); hostStep();
   }
-  function hostRestart() { UI.closeModal(); if (isRummy()) return rHostNew(); g = Hearts.newGame(names()); Hearts.startHand(g); hostStep(); }
+  function hostRestart() { UI.closeModal(); if (isRummy()) return rHostNew(); if (isWhist()) return wHostNew(); g = Hearts.newGame(names()); Hearts.startHand(g); hostStep(); }
   let rebuilding = false;
   function maybeRebuild() {
     if (isHost() && !g && !rebuilding && pub && pub.phase !== 'lobby') { rebuilding = true; hostRebuild().finally(() => { rebuilding = false; }); }
   }
   async function hostRebuild() {
     if (isRummy()) return rHostRebuild();
+    if (isWhist()) return wHostRebuild();
     const hs = arr4((await room.child('hands').get()).val(), null);
     const st = pub;
     g = {
@@ -2122,6 +2286,7 @@ const RBot = (() => {
     ref.remove();
     if (!g || !a || isBot(seat)) return;
     if (g.game === 'rummy') return rHostAction(seat, a);
+    if (g.game === 'whist') return wHostAction(seat, a);
     let ok = false;
     if (a.type === 'pass') ok = Hearts.setPass(g, seat, list(a.cards));
     else if (a.type === 'play') { const ask = Hearts.canFinish(g); ok = Hearts.playCard(g, seat, a.card); if (ok && ask) g.playOut = true; }
@@ -2141,7 +2306,7 @@ const RBot = (() => {
         if (isBot(s) && !g.ready[s]) { Hearts.setReady(g, s); changed = true; }
     }
   }
-  function hostStep() { if (g && g.game === 'rummy') return rHostStep(); hostAutoBots(); hostPublish(); hostSchedule(); }
+  function hostStep() { if (g && g.game === 'rummy') return rHostStep(); if (g && g.game === 'whist') return wHostStep(); hostAutoBots(); hostPublish(); hostSchedule(); }
   function hostSchedule() {
     clearTimeout(hostTimer);
     if (g.phase === 'trickEnd') hostTimer = setTimeout(() => { Hearts.collectTrick(g); hostStep(); }, SPEED.trick);
@@ -2251,6 +2416,8 @@ const RBot = (() => {
   };
   const rt = (k, ...a) => { const v = RS[I18N.lang][k]; return typeof v === 'function' ? v(...a) : v; };
   const isRummy = () => (meta && meta.game === 'rummy') || (pub && pub.game === 'rummy');
+  const curGame = () => (isRummy() ? 'rummy' : isWhist() ? 'whist' : 'hearts');
+  const gameName = gm => (gm === 'rummy' ? rt('name') : gm === 'whist' ? wt('name') : rt('hearts'));
   const cardName = c => `${Hearts.rankTxt(Rummy.rank(c))}${Hearts.SYM[Rummy.suit(c)]}`;
   let rPeek = '';
   let rTurnKey = '', rTurnAt = 0, rWaitT = null;
@@ -2270,8 +2437,8 @@ const RBot = (() => {
   /* ---- choosing the game when opening a table ---- */
   function showRules(which, onBack) {
     const sheet = UI.modal('rules', `<h2>${t('rulesH')}</h2>
-      <div class="rtabs"><button class="btn${which === 'hearts' ? '' : ' ghost'}" data-g="hearts">♥ ${rt('hearts')}</button><button class="btn${which === 'rummy' ? '' : ' ghost'}" data-g="rummy">🃏 ${rt('name')}</button></div>
-      ${which === 'rummy' ? rt('rules') : t('rules')}`,
+      <div class="rtabs"><button class="btn${which === 'hearts' ? '' : ' ghost'}" data-g="hearts">♥ ${rt('hearts')}</button><button class="btn${which === 'rummy' ? '' : ' ghost'}" data-g="rummy">🃏 ${rt('name')}</button><button class="btn${which === 'whist' ? '' : ' ghost'}" data-g="whist">♠ ${wt('name')}</button></div>
+      ${which === 'rummy' ? rt('rules') : which === 'whist' ? wt('rules') : t('rules')}`,
       [{ label: onBack ? t('back') : t('close'), onClick: () => { if (onBack) onBack(); else { UI.closeModal('rules'); redraw(); } } }]);
     sheet.querySelectorAll('[data-g]').forEach(b => b.onclick = () => showRules(b.dataset.g, onBack));
   }
@@ -2283,22 +2450,35 @@ const RBot = (() => {
       <div class="ropts" id="ropts" hidden>
         <div class="field"><label for="rc">${rt('cardsLbl')}</label><select id="rc">${[7, 8, 9, 10].map(n => opt(n, 7)).join('')}</select></div>
         <div class="field"><label for="rtg">${rt('targetLbl')}</label><select id="rtg">${[50, 100, 200, 300].map(n => `<option value="${n}"${n === 100 ? ' selected' : ''}>${rt('pts', n)}</option>`).join('')}</select></div>
+      </div></div>
+      <div class="gbox"><label class="gpick"><input type="radio" name="gm" value="whist"><span><b>♠ ${wt('name')}</b><small>${wt('sub')}</small></span><button type="button" class="glink" data-rules="whist">${t('rulesH')}</button></label>
+      <div class="ropts" id="wopts" hidden>
+        <div class="field"><label for="wtg">${wt('targetLbl')}</label><input id="wtg" type="number" inputmode="numeric" min="1" value="${pre.wtg || 100}"></div>
+        <div class="field"><label for="wbn">${wt('bonusLbl')}</label><input id="wbn" type="number" inputmode="numeric" min="0" value="${pre.wbn != null ? pre.wbn : 13}"></div>
+        <div class="field"><label for="wpn">${wt('penaltyLbl')}</label><input id="wpn" type="number" inputmode="numeric" min="0" value="${pre.wpn != null ? pre.wpn : 3}"></div>
       </div></div><div class="err" id="err3"></div>`,
       [{ label: rt('create'), onClick: async () => {
         const game = sheet.querySelector('input[name=gm]:checked').value;
-        const opts = game === 'rummy' ? { cards: +sheet.querySelector('#rc').value, target: +sheet.querySelector('#rtg').value } : null;
+        let opts = game === 'rummy' ? { cards: +sheet.querySelector('#rc').value, target: +sheet.querySelector('#rtg').value } : null;
+        if (game === 'whist') {
+          const v = id => Math.round(+sheet.querySelector(id).value);
+          opts = { target: v('#wtg'), bonus: v('#wbn'), penalty: v('#wpn') };
+          if (!(opts.target >= 1) || !(opts.bonus >= 0) || !(opts.penalty >= 0)) { sheet.querySelector('#err3').textContent = wt('badNum'); return; }
+        }
         try { await createRoom(name, game, opts); } catch (e) { sheet.querySelector('#err3').textContent = e.message || String(e); }
       } }, { label: t('cancel'), ghost: true, onClick: () => lobby() }]);
-    const syncOpts = () => { sheet.querySelector('#ropts').hidden = sheet.querySelector('input[name=gm]:checked').value !== 'rummy'; };
+    const syncOpts = () => { const gm = sheet.querySelector('input[name=gm]:checked').value; sheet.querySelector('#ropts').hidden = gm !== 'rummy'; sheet.querySelector('#wopts').hidden = gm !== 'whist'; };
     sheet.querySelectorAll('input[name=gm]').forEach(r => r.onchange = syncOpts);
     if (pre.game) { sheet.querySelector(`input[value=${pre.game}]`).checked = true; sheet.querySelector('#rc').value = pre.cards; sheet.querySelector('#rtg').value = pre.target; syncOpts(); }
     sheet.querySelectorAll('[data-rules]').forEach(b => b.onclick = e => {
       e.preventDefault(); e.stopPropagation();
-      const st = { game: sheet.querySelector('input[name=gm]:checked').value, cards: sheet.querySelector('#rc').value, target: sheet.querySelector('#rtg').value };
+      const st = { game: sheet.querySelector('input[name=gm]:checked').value, cards: sheet.querySelector('#rc').value, target: sheet.querySelector('#rtg').value,
+        wtg: sheet.querySelector('#wtg').value, wbn: sheet.querySelector('#wbn').value, wpn: sheet.querySelector('#wpn').value };
       showRules(b.dataset.rules, () => chooseGame(name, st));
     });
   }
   function gameLabel() {
+    if (isWhist()) { const o = (meta && meta.opts) || {}; return '♠ ' + wt('line', o.target || 100, o.bonus != null ? o.bonus : 13, o.penalty != null ? o.penalty : 3); }
     if (!isRummy()) return '♥ ' + rt('hearts');
     const o = (meta && meta.opts) || {};
     return '🃏 ' + rt('gameLine', rt('name'), o.cards || 7, o.target || 100);
@@ -2674,6 +2854,226 @@ const RBot = (() => {
       drewFrom: st.drewFrom || null, takenCard: st.takenCard || null, reshuffles: st.reshuffles || 0, last: st.last || null,
       ready: st.ready, winner: st.winner, handDelta: st.handDelta, winners: st.winners.length ? st.winners : null, review: st.review };
     rHostStep();
+    const pending = (await room.child('actions').get()).val() || {};
+    Object.keys(pending).forEach(k => hostAction(+k, pending[k], room.child('actions/' + k)));
+  }
+
+
+  /* ================= Whist (third game) ================= */
+  const WS = {
+    he: {
+      name: 'ויסט', sub: '4 שחקנים, כל אחד לעצמו. בכל סיבוב מישהו אחר מכריז על השליט.',
+      targetLbl: 'משחקים עד', bonusLbl: 'בונוס על 13 לקיחות', penaltyLbl: 'קנס על 0 לקיחות',
+      line: (tg, b, p) => `ויסט · עד ${tg} · בונוס ${b} · קנס ${p}`,
+      opt: { S: '♠ עלה', H: '♥ לב', D: '♦ יהלום', C: '♣ תלתן', N: 'ללא שליט' },
+      optShort: { S: '♠', H: '♥', D: '♦', C: '♣', N: 'ללא' },
+      chooseTrump: 'בחר/י שליט לסיבוב הזה', choosing: n => `${n} בוחר/ת שליט…`,
+      trumpIs: (o, n) => `שליט: <b>${o}</b><br><small>הכריז/ה ${n}</small>`, noLeadTrump: 'בלקיחה הראשונה אסור לפתוח בשליט',
+      yourLead: 'תורך לפתוח', yourTurn: 'תורך', turnOf: n => `התור של ${n}`, tapAgain: 'הקש שוב כדי לשחק',
+      tricks: k => `${k} לקיחות`, declTag: o => `מכריז ${o}`,
+      declBtn: 'טבלת הכרזות', declH: 'הכרזות', declNote: 'לכל שחקן 5 הכרזות, כל אחת פעם אחת. ✓ = כבר הוכרזה בסבב הנוכחי.',
+      colRound: 'סיבוב', colDecl: 'הכרזה', colTricks: 'לקיחות', colPts: 'נקודות', colTot: 'סה״כ',
+      handOver: n => `סוף סיבוב ${n}`, youWon: 'ניצחת במשחק! 🏆', wonBy: l => `${l} ניצח/ה במשחק`,
+      bonusNote: (n, b) => `${n} לקח/ה את כל הלקיחות: בונוס ${b}`, penNote: (l, p) => `בלי לקיחות (−${p}): ${l}`,
+      badNum: 'יש להקליד מספרים תקינים (יעד לפחות 1).',
+      rules: `<div class="rules"><ul>
+        <li>4 שחקנים, כל אחד משחק לעצמו. כל שחקן מקבל 13 קלפים.</li>
+        <li>בכל סיבוב שחקן אחר מכריז, לפי סדר הישיבה. המכריז רואה את הקלפים שלו ובוחר שליט: ♠, ♥, ♦, ♣ או "ללא שליט".</li>
+        <li>לכל שחקן 5 הכרזות, וכל אחת מהן אפשר לבחור רק פעם אחת. אחרי שהשתמש בכל החמש, מתחיל לו סבב חדש. את מה שכבר הוכרז רואים ב"טבלת הכרזות".</li>
+        <li>השחקן שאחרי המכריז פותח את הלקיחה הראשונה. בלקיחה הראשונה אסור לפתוח בצורת השליט, אלא אם אין ברירה. מהלקיחה השנייה מותר לפתוח בכל צורה.</li>
+        <li>חובה לשחק באותה צורה שנפתחה. מי שאין לו את הצורה רשאי לשחק שליט או כל קלף אחר.</li>
+        <li>הקלף הגבוה בצורה שנפתחה לוקח את הלקיחה. אם שוחק שליט, השליט הגבוה ביותר לוקח. אס הוא הקלף הגבוה. מי שלקח פותח את הלקיחה הבאה.</li>
+        <li>כל לקיחה שווה נקודה. מי שלוקח את כל 13 הלקיחות מקבל בונוס, ומי שלא לוקח אף לקיחה מקבל קנס. את היעד, הבונוס והקנס המארח קובע בפתיחת השולחן (ברירת מחדל: 100, 13 ו־3).</li>
+        <li>מי שמגיע ראשון ליעד מנצח. אם כמה עוברים את היעד באותו סיבוב, מנצח מי שיש לו יותר.</li>
+        <li>בסוף כל סיבוב מוצג סיכום, והסיבוב הבא מתחיל אחרי שכל השחקנים לחצו "מוכן ליד הבאה". בכפתור "ניקוד" רואים את כל הסיבובים.</li></ul>
+        <p>במסך: מקישים על קלף כדי לסמן אותו, ושוב כדי לשחק.</p></div>`,
+    },
+    en: {
+      name: 'Whist', sub: '4 players, each for themselves. A different player names trumps each hand.',
+      targetLbl: 'Play to', bonusLbl: 'Bonus for 13 tricks', penaltyLbl: 'Penalty for 0 tricks',
+      line: (tg, b, p) => `Whist · to ${tg} · bonus ${b} · penalty ${p}`,
+      opt: { S: '♠ Spades', H: '♥ Hearts', D: '♦ Diamonds', C: '♣ Clubs', N: 'No trump' },
+      optShort: { S: '♠', H: '♥', D: '♦', C: '♣', N: 'NT' },
+      chooseTrump: 'Choose trumps for this hand', choosing: n => `${n} is choosing trumps…`,
+      trumpIs: (o, n) => `Trumps: <b>${o}</b><br><small>named by ${n}</small>`, noLeadTrump: "You can't lead trumps on the first trick",
+      yourLead: 'Your lead', yourTurn: 'Your turn', turnOf: n => `${n}'s turn`, tapAgain: 'Tap again to play',
+      tricks: k => `${k} tricks`, declTag: o => `Declarer ${o}`,
+      declBtn: 'Declarations', declH: 'Declarations', declNote: 'Each player has 5 declarations, each used once. ✓ = already used in the current cycle.',
+      colRound: 'Hand', colDecl: 'Trumps', colTricks: 'Tricks', colPts: 'Points', colTot: 'Total',
+      handOver: n => `Hand ${n} over`, youWon: 'You won the game! 🏆', wonBy: l => `${l} won the game`,
+      bonusNote: (n, b) => `${n} took every trick: bonus ${b}`, penNote: (l, p) => `No tricks (−${p}): ${l}`,
+      badNum: 'Please enter valid numbers (target at least 1).',
+      rules: `<div class="rules"><ul>
+        <li>4 players, each playing for themselves. Everyone gets 13 cards.</li>
+        <li>Each hand a different player, in seating order, is the declarer. The declarer looks at their cards and chooses trumps: ♠, ♥, ♦, ♣ or "No trump".</li>
+        <li>Each player has 5 declarations and may use each of them only once. After using all five, a new cycle starts. "Declarations" shows what has been used.</li>
+        <li>The player after the declarer leads the first trick. You may not lead a trump on the first trick unless you have nothing else. From the second trick on, any suit may be led.</li>
+        <li>You must follow the suit that was led. If you can't, you may play a trump or any other card.</li>
+        <li>The highest card of the suit led wins the trick, unless trumps were played; then the highest trump wins. Ace is high. The winner leads the next trick.</li>
+        <li>Each trick is worth one point. Taking all 13 tricks earns a bonus, and taking none costs a penalty. The host sets the target, bonus and penalty when opening the table (defaults: 100, 13 and 3).</li>
+        <li>The first to reach the target wins. If several pass it in the same hand, the highest score wins.</li>
+        <li>A summary appears after each hand, and the next hand starts once every player has pressed "Ready for next hand". "Scores" shows every hand.</li></ul>
+        <p>On screen: tap a card to select it, and tap it again to play.</p></div>`,
+    },
+  };
+  const wt = (k, ...a) => { const v = WS[I18N.lang][k]; return typeof v === 'function' ? v(...a) : v; };
+  const isWhist = () => (meta && meta.game === 'whist') || (pub && pub.game === 'whist');
+  const wOpt = o => (o ? WS[I18N.lang].opt[o] : '');
+  const wShort = o => (o ? WS[I18N.lang].optShort[o] : '');
+
+  function wnorm(v) {
+    v = v || {};
+    const st = Object.assign({ phase: 'lobby' }, v);
+    st.game = 'whist';
+    st.scores = arr4(v.scores, 0); st.taken = arr4(v.taken, 0); st.counts = arr4(v.counts, 0); st.ready = arr4(v.ready, false);
+    st.handDelta = arr4(v.handDelta, 0); st.names = arr4(v.names, '');
+    st.used = arr4(v.used, null).map(list);
+    st.trick = list(v.trick);
+    st.history = list(v.history).map(h => ({ d: h.d, t: h.t, k: arr4(h.k, 0), p: arr4(h.p, 0) }));
+    st.lastTrick = v.lastTrick ? { cards: list(v.lastTrick.cards), winner: v.lastTrick.winner } : null;
+    st.trickWinner = v.trickWinner != null ? v.trickWinner : null;
+    st.winners = list(v.winners);
+    st.turn = v.turn != null ? v.turn : -1;
+    st.tricksPlayed = v.tricksPlayed || 0;
+    st.trump = v.trump || null;
+    return st;
+  }
+
+  /* ---- client ---- */
+  function wRedraw() {
+    setHeader();
+    const N = names();
+    if (pub.phase === 'lobby') { UI.render(Object.assign(emptyView(), { mySeat, players: playersView(N, {}) })); return waitingRoom(N); }
+    if (UI.currentModal() === 'waiting') UI.closeModal('waiting');
+    const declaring = pub.phase === 'declare';
+    const myTurn = pub.phase === 'playing' && pub.turn === mySeat && !sent;
+    const iDeclare = declaring && pub.declarer === mySeat && !sent;
+    const hand = Hearts.sortHand(myHand.cards);
+    const legal = myTurn ? Whist.legalPlays(hand, pub.trick, pub.trump, pub.tricksPlayed) : null;
+    const pv = playersView(N, {});
+    const tags = [0, 1, 2, 3].map(s => {
+      const out = [];
+      if (s === pub.declarer && pub.trump) out.push(`<span class="tag ok">${UI.esc(wt('declTag', wShort(pub.trump)))}</span>`);
+      if (pub.phase !== 'declare') out.push(`<span class="tag pts">${UI.esc(wt('tricks', pub.taken[s]))}</span>`);
+      return out.join('');
+    });
+    let status = '';
+    if (declaring) status = iDeclare
+      ? wt('chooseTrump') + `<div class="wdecl">${Whist.OPTS.map(o => `<button class="btn" data-decl="${o}"${Whist.available({ used: pub.used }, mySeat).includes(o) ? '' : ' disabled'}>${wOpt(o)}</button>`).join('')}</div>`
+      : wt('choosing', UI.esc(N[pub.declarer]));
+    else if (pub.phase === 'playing' && !pub.trick.length) {
+      status = wt('trumpIs', wOpt(pub.trump), UI.esc(N[pub.declarer]));
+      if (myTurn) status += '<br>' + (armed ? wt('tapAgain') : wt('yourLead')) + (pub.tricksPlayed === 0 && pub.trump !== 'N' ? `<br><small>${wt('noLeadTrump')}</small>` : '');
+      else if (pub.turn >= 0) status += '<br>' + wt('turnOf', UI.esc(N[pub.turn]));
+    }
+    const actions = pub.phase === 'playing' || pub.phase === 'trickEnd' || declaring ? [{ key: 'decls', label: wt('declBtn'), ghost: true }] : [];
+    UI.render({
+      mySeat, sub: t('roomHand', code, pub.handNum + 1) + (pub.trump ? ' · ' + wShort(pub.trump) : ''),
+      players: pv, scores: pub.scores, counts: pub.counts, tags,
+      phase: pub.phase, turn: declaring ? pub.declarer : pub.turn,
+      trick: pub.trick, trickWinner: pub.trickWinner,
+      hand, legal, selected: armed ? [armed] : [],
+      interactive: myTurn,
+      status: hostBanner() || status,
+      actions,
+    });
+    wEndModal(N);
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-decl]');
+    if (b && !b.disabled && isWhist()) wOnAction('decl:' + b.dataset.decl);
+  });
+  function wOnCard(id) {
+    if (!pub || pub.phase !== 'playing' || pub.turn !== mySeat || sent) return;
+    if (!Whist.legalPlays(myHand.cards, pub.trick, pub.trump, pub.tricksPlayed).includes(id)) return;
+    if (armed === id) { armed = null; sent = true; send({ type: 'play', card: id }); }
+    else armed = id;
+    redraw();
+  }
+  function wOnAction(k) {
+    if (k === 'decls') return wShowDecls();
+    if (k.startsWith('decl:') && pub && pub.phase === 'declare' && pub.declarer === mySeat && !sent) {
+      sent = true; send({ type: 'declare', opt: k.slice(5) }); redraw();
+    }
+  }
+  function wDeclTable(N) {
+    return `<div class="tbl-wrap"><table class="sc"><thead><tr><th style="text-align:start">${t('colPlayer')}</th>${Whist.OPTS.map(o => `<th>${wShort(o)}</th>`).join('')}</tr></thead><tbody>${
+      [0, 1, 2, 3].map(s => `<tr><td class="n">${UI.esc(N[s])}${s === mySeat ? t('me') : ''}</td>${Whist.OPTS.map(o => `<td>${(pub.used[s] || []).includes(o) ? '✓' : ''}</td>`).join('')}</tr>`).join('')
+    }</tbody></table></div><p style="font-size:.85rem;color:var(--muted)">${wt('declNote')}</p>`;
+  }
+  function wShowDecls() { UI.modal('decls', `<h2>${wt('declH')}</h2>` + wDeclTable(names()), [{ label: t('close'), close: true }]); }
+  function wScoreTable(N) {
+    const run = [0, 0, 0, 0];
+    const rows = pub.history.map((h, i) => {
+      h.p.forEach((p, s) => { run[s] += p; });
+      return `<tr><td>${i + 1}</td><td style="white-space:nowrap">${UI.esc(N[h.d])} ${wShort(h.t)}</td>${[0, 1, 2, 3].map(s =>
+        `<td><b dir="ltr">${run[s]}</b><br><small style="color:var(--muted)" dir="ltr">${h.k[s]}${h.p[s] !== h.k[s] ? ` (${h.p[s] > 0 ? '+' : ''}${h.p[s]})` : ''}</small></td>`).join('')}</tr>`;
+    }).join('');
+    return `<div class="tbl-wrap"><table class="sc"><thead><tr><th>${wt('colRound')}</th><th>${wt('colDecl')}</th>${[0, 1, 2, 3].map(s => `<th>${UI.esc(N[s])}${s === mySeat ? t('me') : ''}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  function wShowScores() {
+    const N = names();
+    const body = pub && pub.history.length ? wScoreTable(N) : `<p>${t('noHands')}</p>`;
+    UI.modal('scores', `<h2>${t('scoresH')}</h2>${body}<h2 style="margin-top:14px">${wt('declH')}</h2>${pub ? wDeclTable(N) : ''}`, [{ label: t('close'), close: true }]);
+  }
+  function wEndModal(N) {
+    const ph = pub.phase;
+    if (ph !== 'handEnd' && ph !== 'gameOver') { UI.closeModal('wend'); return; }
+    const h = pub.history[pub.history.length - 1] || { k: [0, 0, 0, 0], p: [0, 0, 0, 0], t: null, d: 0 };
+    const title = ph === 'gameOver' ? (pub.winners.includes(mySeat) ? wt('youWon') : wt('wonBy', pub.winners.map(i => N[i]).join(t('and')))) : wt('handOver', pub.handNum + 1);
+    const rows = [0, 1, 2, 3].map(s => `<tr><td class="n">${UI.esc(N[s])}${s === mySeat ? t('me') : ''}</td><td>${h.k[s]}</td><td dir="ltr">${h.p[s] > 0 ? '+' : ''}${h.p[s]}</td><td style="font-family:var(--serif);font-weight:700" dir="ltr">${pub.scores[s]}</td></tr>`).join('');
+    const all = [0, 1, 2, 3].find(s => h.k[s] === 13), zero = [0, 1, 2, 3].filter(s => h.k[s] === 0);
+    const notes = (all != null ? `<p>${wt('bonusNote', UI.esc(N[all]), pub.bonus)}</p>` : '') + (zero.length ? `<p>${wt('penNote', zero.map(s => UI.esc(N[s])).join(', '), pub.penalty)}</p>` : '');
+    const ready = ph === 'handEnd' ? `<p>${t('readyList', [0, 1, 2, 3].filter(s => pub.ready[s]).map(s => UI.esc(N[s])).join(', ') || t('nobodyYet'))}</p>` : '';
+    const btns = ph === 'handEnd'
+      ? [{ label: t(pub.ready[mySeat] ? 'waitOthers' : 'readyBtn'), disabled: pub.ready[mySeat], onClick: () => send({ type: 'ready' }) }]
+      : (isHost() ? [{ label: t('restart'), onClick: hostRestart }] : []);
+    btns.push({ label: wt('declBtn'), ghost: true, onClick: () => UI.modal('decls', `<h2>${wt('declH')}</h2>` + wDeclTable(N), [{ label: t('back'), onClick: () => { UI.closeModal(); redraw(); } }]) });
+    UI.modal('wend', `<h2>${UI.esc(title)}</h2><p>${wt('trumpIs', wOpt(h.t), UI.esc(N[h.d]))}</p>
+      <div class="tbl-wrap"><table class="sc"><thead><tr><th style="text-align:start">${t('colPlayer')}</th><th>${wt('colTricks')}</th><th>${wt('colPts')}</th><th>${wt('colTot')}</th></tr></thead><tbody>${rows}</tbody></table></div>
+      ${notes}${ready}${ph === 'gameOver' ? wScoreTable(N) + (isHost() ? '' : `<p>${t('hostCanRestart')}</p>`) : ''}`, btns);
+  }
+
+  /* ---- host ---- */
+  function wHostNew() { g = Whist.newGame(names(), (meta && meta.opts) || {}); Whist.startHand(g); wHostStep(); }
+  function wHostAction(seat, a) {
+    let ok = false;
+    if (a.type === 'declare') ok = Whist.declare(g, seat, a.opt);
+    else if (a.type === 'play') ok = Whist.playCard(g, seat, a.card);
+    else if (a.type === 'ready') ok = Whist.setReady(g, seat);
+    if (ok) wHostStep(); else wHostPublish();
+  }
+  function wHostStep() {
+    if (g.phase === 'handEnd') for (let s = 0; s < 4; s++) if (isBot(s) && !g.ready[s]) Whist.setReady(g, s);
+    wHostPublish();
+    clearTimeout(hostTimer);
+    if (g.phase === 'trickEnd') hostTimer = setTimeout(() => { Whist.collectTrick(g); wHostStep(); }, SPEED.trick);
+    else if (g.phase === 'declare' && isBot(g.declarer)) hostTimer = setTimeout(() => { if (g.phase === 'declare' && isBot(g.declarer)) { Whist.declare(g, g.declarer, WBot.chooseDeclare(g, g.declarer)); wHostStep(); } }, SPEED.bot * 2);
+    else if (g.phase === 'playing' && isBot(g.turn)) hostTimer = setTimeout(() => { if (g.phase === 'playing' && isBot(g.turn)) { Whist.playCard(g, g.turn, WBot.choosePlay(g, g.turn)); wHostStep(); } }, SPEED.bot);
+  }
+  function wHostPublish() {
+    g.seq = (g.seq || 0) + 1;
+    const st = {
+      game: 'whist', phase: g.phase, handNum: g.handNum, names: g.names, seq: g.seq, target: g.target, bonus: g.bonus, penalty: g.penalty,
+      first: g.first, scores: g.scores, history: g.history, used: g.used, declarer: g.declarer, trump: g.trump,
+      turn: g.turn, leader: g.leader, trick: g.trick, trickWinner: g.trickWinner, lastTrick: g.lastTrick, tricksPlayed: g.tricksPlayed,
+      taken: g.taken, played: g.played, ready: g.ready, handDelta: g.handDelta, winners: g.winners, counts: g.hands.map(h => h.length),
+    };
+    const up = { state: JSON.parse(JSON.stringify(st)) };
+    for (let s = 0; s < 4; s++) up['hands/' + s] = { cards: g.hands[s] };
+    room.update(up);
+  }
+  async function wHostRebuild() {
+    const hs = arr4((await room.child('hands').get()).val(), null);
+    const st = pub;
+    g = {
+      game: 'whist', names: st.names, target: st.target || 100, bonus: st.bonus != null ? st.bonus : 13, penalty: st.penalty != null ? st.penalty : 3,
+      first: st.first || 0, scores: st.scores, history: st.history, handNum: st.handNum, used: st.used, seq: st.seq || 0,
+      declarer: st.declarer, trump: st.trump, phase: st.phase, turn: st.turn, leader: st.leader, trick: st.trick, trickWinner: st.trickWinner,
+      lastTrick: st.lastTrick, tricksPlayed: st.tricksPlayed, taken: st.taken, played: list(st.played), ready: st.ready,
+      handDelta: st.handDelta, winners: st.winners.length ? st.winners : null, hands: hs.map(h => list(h && h.cards)),
+    };
+    wHostStep();
     const pending = (await room.child('actions').get()).val() || {};
     Object.keys(pending).forEach(k => hostAction(+k, pending[k], room.child('actions/' + k)));
   }
