@@ -1582,7 +1582,7 @@ const WBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 17;
+  const APP_VER = 18;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -1647,8 +1647,23 @@ const WBot = (() => {
        ...(isAdmin() ? [{ label: '🛠 ' + h('adminBtn'), ghost: true, onClick: adminScreen }] : []),
        ...(isEmailUser() ? [{ label: h('signOut'), ghost: true, onClick: signOut }] : [])]);
     sheet.querySelector('#nm').focus();
+    if (!urlCode) offerRejoin(sheet);
     let rj = ''; try { rj = sessionStorage.getItem('cg-rejoin') || ''; sessionStorage.removeItem('cg-rejoin'); } catch (e) {}
     if (rj && rj === urlCode && savedName() && !err) go('join');
+  }
+  async function offerRejoin(sheet) {
+    let c = ''; try { c = localStorage.getItem('cg-last-room') || ''; } catch (e) {}
+    if (!c || !db || !uid) return;
+    try {
+      const [m, ps] = await Promise.all([db.ref('rooms/' + c + '/meta').get(), db.ref('rooms/' + c + '/players').get()]);
+      const mine = arr4(ps.val(), null).some(p => p && p.uid === uid && !p.bot);
+      if (!m.exists() || !mine) { try { localStorage.removeItem('cg-last-room'); } catch (e) {} return; }
+      if (UI.currentModal() !== 'lobby') return;
+      const b = Object.assign(document.createElement('button'), { className: 'btn', textContent: h('rejoin', c) });
+      b.style.width = '100%'; b.style.marginBottom = '10px';
+      b.onclick = () => { document.getElementById('cd').value = c; go('join'); };
+      sheet.querySelector('h2').after(b);
+    } catch (e) {}
   }
   function lobbyError(msg) { const e = document.getElementById('err'); if (e) e.textContent = msg; else lobby(msg); }
   async function go(kind) {
@@ -1695,7 +1710,10 @@ const WBot = (() => {
   const ADMIN_EMAIL = 'pspcom@gmail.com';
   const H2 = {
     he: {
-      newVer: 'יש גרסה חדשה – טוען מחדש…', leftLobby: n => `${n} עזב/ה את השולחן`, leftGame: n => `${n} עזב/ה את השולחן. רובוט ממשיך במקומו/ה.`,
+      newVer: 'יש גרסה חדשה – טוען מחדש…', pauseBtn: '⏸ הפסקה', pauseToo: '⏸ גם אני יוצא/ת להפסקה', pauseH: '⏸ הפסקה', backBtn: 'חזרתי',
+      pauseMine: 'יצאת להפסקה. המשחק עוצר עד שתחזור/י ותלחץ/י "חזרתי".', pauseAlso: l => `גם ${l} בהפסקה.`,
+      pauseOther: l => `${l} יצא/ה להפסקה קצרה. המשחק ממתין לחזרה.`, resumeQ: n => `${n} חזר/ה. ממשיכים?`, resumeBtn: 'המשך',
+      pauseWait: l => `ממתינים ל: ${l}`, forceBtn: 'המשך עכשיו', forceNote: 'כמארח/ת אפשר להמשיך בלי לחכות.', rejoin: c => `↩ חזרה לשולחן ${c}`, leftLobby: n => `${n} עזב/ה את השולחן`, leftGame: n => `${n} עזב/ה את השולחן. רובוט ממשיך במקומו/ה.`,
       newHost: n => `${n} הוא/היא המארח/ת עכשיו`, youHost: 'אתה המארח עכשיו. המשחק ממשיך אצלך.',
       leave: 'עזוב שולחן', leaveQ: 'לעזוב את השולחן?', leaveBtn: 'כן, לעזוב',
       leaveLobby: 'המקום שלך בשולחן יתפנה.', leaveGame: 'המקום שלך יעבור לרובוט, והמשחק ימשיך בלעדיך.',
@@ -1725,6 +1743,10 @@ const WBot = (() => {
     },
     en: {
       newVer: 'A new version is available – reloading…',
+      pauseBtn: '⏸ Break', pauseToo: '⏸ I need a break too', pauseH: '⏸ Break', backBtn: "I'm back",
+      pauseMine: 'You are on a break. The game waits until you return and press "I\'m back".', pauseAlso: l => `${l} is on a break too.`,
+      pauseOther: l => `${l} stepped away for a short break. The game is waiting.`, resumeQ: n => `${n} is back. Continue?`, resumeBtn: 'Continue',
+      pauseWait: l => `Waiting for: ${l}`, forceBtn: 'Continue now', forceNote: 'As host you can continue without waiting.', rejoin: c => `↩ Back to table ${c}`,
       leftLobby: n => `${n} left the table`, leftGame: n => `${n} left the table. A robot is playing in their place.`,
       newHost: n => `${n} is now the host`, youHost: "You're now the host. The game continues on your device.",
       leave: 'Leave table', leaveQ: 'Leave the table?', leaveBtn: 'Yes, leave',
@@ -1966,6 +1988,7 @@ const WBot = (() => {
   /* ---------- in room ---------- */
   function enter() {
     UI.closeModal('lobby');
+    try { localStorage.setItem('cg-last-room', code); } catch (e) {}
     history.replaceState(null, '', location.pathname + '?room=' + code);
     const onRef = room.child('players/' + mySeat + '/online');
     room.child('players/' + mySeat + '/ver').set(APP_VER).catch(() => {});
@@ -2027,6 +2050,7 @@ const WBot = (() => {
     st.claimAck = arr4(v.claimAck, false);
     st.claimed = v.claimed || null;
     st.tricksPlayed = v.tricksPlayed || 0;
+    st.pause = pnorm(v.pause);
     return st;
   }
   let lastPhaseKey = '';
@@ -2043,7 +2067,7 @@ const WBot = (() => {
   function redraw() {
     if (!pub || mySeat < 0) return;
     if (isRummy()) return rRedraw();
-    if (isWhist()) return wRedraw();
+    if (isWhist()) { wRedraw(); return pauseModal(); }
     setHeader();
     const N = names();
     if (pub.phase === 'lobby') { UI.render(Object.assign(emptyView(), { mySeat, players: playersView(N, {}) })); return waitingRoom(N); }
@@ -2070,6 +2094,7 @@ const WBot = (() => {
     });
     endModal(N);
     finishModal();
+    pauseModal();
   }
   function finishModal() {
     if (!(pub.finishAsk && isHost() && g)) return UI.closeModal('finish');
@@ -2147,6 +2172,7 @@ const WBot = (() => {
   function onCard(id) {
     if (!pub) return;
     if (isWhist()) return wOnCard(id);
+    if (pub.pause) return;
     if (pub.phase === 'passing' && !pub.passDone[mySeat] && !sent) {
       if (sel.has(id)) sel.delete(id); else if (sel.size < 3) sel.add(id);
       return redraw();
@@ -2175,6 +2201,7 @@ const WBot = (() => {
       <p style="margin-top:14px">${t('codeIs')} <b dir="ltr">${code || ''}</b></p>`,
       [{ label: '🌐 ' + t('langBtn'), ghost: true, onClick: () => { UI.closeModal(); switchLang(); redraw(); } },
        { label: t('rulesBtn'), ghost: true, onClick: () => showRules(curGame(), null) },
+       ...(pub && pub.phase !== 'lobby' && !(pub.pause && pub.pause.away[mySeat]) ? [{ label: h('pauseBtn'), ghost: true, onClick: () => { UI.closeModal(); send({ type: 'pause' }); } }] : []),
        ...(code ? [{ label: t('share'), ghost: true, onClick: () => share(location.origin + location.pathname + '?room=' + code) }] : []),
        ...(isAdmin() ? [{ label: '🛠 ' + h('adminBtn'), ghost: true, onClick: () => { UI.closeModal(); if (code) window.open(location.pathname + '?admin=1', '_blank'); else adminScreen(); } }] : []),
        ...(code && mySeat >= 0 ? [{ label: '🚪 ' + h('leave'), ghost: true, onClick: leaveTable }] : []),
@@ -2222,6 +2249,7 @@ const WBot = (() => {
     UI.modal('leave', `<h2>${h('leaveQ')}</h2><p>${p}</p>`, [
       { label: h('leaveBtn'), onClick: async () => {
         leaving = true;
+        try { localStorage.removeItem('cg-last-room'); } catch (e) {}
         try {
           if (isHost() && next == null) { await room.child('meta').remove(); }
           else {
@@ -2276,7 +2304,7 @@ const WBot = (() => {
       claiming: st.claiming, claimType: st.claimType || null, claimed: st.claimed, claimAck: st.claimAck, playOut: !!st.playOut, heartsBroken: !!st.heartsBroken, tricksPlayed: st.tricksPlayed, moon: st.moon, handDelta: st.handDelta,
       winners: st.winners.length ? st.winners : null, turn: st.turn, leader: st.leader != null ? st.leader : -1,
       hands: hs.map(h => list(h && h.cards)), received: hs.map(h => list(h && h.received)),
-      passSel: hs.map(h => (h && h.passSel ? list(h.passSel) : null)),
+      passSel: hs.map(h => (h && h.passSel ? list(h.passSel) : null)), pause: st.pause,
     };
     hostStep();
     const pending = (await room.child('actions').get()).val() || {};
@@ -2285,6 +2313,8 @@ const WBot = (() => {
   function hostAction(seat, a, ref) {
     ref.remove();
     if (!g || !a || isBot(seat)) return;
+    if (['pause', 'back', 'resumeOk', 'pauseEnd'].includes(a.type)) return hostPause(seat, a.type);
+    if (g.pause) return hostRepublish();
     if (g.game === 'rummy') return rHostAction(seat, a);
     if (g.game === 'whist') return wHostAction(seat, a);
     let ok = false;
@@ -2293,6 +2323,43 @@ const WBot = (() => {
     else if (a.type === 'ready') ok = Hearts.setReady(g, seat);
     else if (a.type === 'claimOk') ok = Hearts.ackClaim(g, seat);
     if (ok) hostStep(); else hostPublish(); // republish so the client un-sticks
+  }
+  /* ---- breaks: any player can pause the game for everyone ---- */
+  const hostRepublish = () => (g.game === 'rummy' ? rHostPublish() : g.game === 'whist' ? wHostPublish() : hostPublish());
+  const isHuman = s => !!players[s] && !players[s].bot;
+  function hostPause(seat, type) {
+    const P = g.pause;
+    if (type === 'pause') {
+      g.pause = { away: P ? P.away.slice() : [false, false, false, false], ack: null, by: null };
+      g.pause.away[seat] = true;
+    } else if (type === 'back' && P && P.away[seat]) {
+      P.away[seat] = false;
+      if (!P.away.some(Boolean)) { P.by = seat; P.ack = [0, 1, 2, 3].map(i => i === seat || !isHuman(i)); if (P.ack.every(Boolean)) g.pause = null; }
+    } else if (type === 'resumeOk' && P && P.ack) {
+      P.ack[seat] = true; if (P.ack.every(Boolean)) g.pause = null;
+    } else if (type === 'pauseEnd' && P && seat === mySeat && isHost()) g.pause = null;
+    else return hostRepublish();
+    hostStep();
+  }
+  function pnorm(v) { return v ? { away: arr4(v.away, false), ack: v.ack ? arr4(v.ack, false) : null, by: v.by != null ? v.by : null } : null; }
+  function pauseModal() {
+    const P = pub && pub.phase !== 'lobby' ? pub.pause : null;
+    if (!P) return UI.closeModal('pause');
+    const N = names(), nm = l => l.map(s => UI.esc(N[s])).join(', ');
+    const away = [0, 1, 2, 3].filter(s => P.away[s]);
+    let body = '', btns = [];
+    if (away.length) {
+      const others = away.filter(s => s !== mySeat);
+      body = P.away[mySeat] ? `<p>${h('pauseMine')}</p>${others.length ? `<p>${h('pauseAlso', nm(others))}</p>` : ''}` : `<p>${h('pauseOther', nm(away))}</p>`;
+      if (P.away[mySeat]) btns.push({ label: h('backBtn'), onClick: () => send({ type: 'back' }) });
+    } else if (P.ack) {
+      const wait = [0, 1, 2, 3].filter(s => !P.ack[s]);
+      body = `<p>${h('resumeQ', UI.esc(N[P.by]))}</p>${wait.length ? `<p>${h('pauseWait', nm(wait))}</p>` : ''}`;
+      if (!P.ack[mySeat]) btns.push({ label: h('resumeBtn'), onClick: () => send({ type: 'resumeOk' }) });
+    }
+    if (!P.away[mySeat]) btns.push({ label: h('pauseToo'), ghost: true, onClick: () => send({ type: 'pause' }) });
+    if (isHost() && !P.away[mySeat]) { body += `<p style="font-size:.85rem;color:var(--muted)">${h('forceNote')}</p>`; btns.push({ label: h('forceBtn'), ghost: true, onClick: () => send({ type: 'pauseEnd' }) }); }
+    UI.modal('pause', `<h2>${h('pauseH')}</h2>${body}`, btns);
   }
   function hostAutoBots() {
     let changed = true, guard = 0;
@@ -2306,7 +2373,7 @@ const WBot = (() => {
         if (isBot(s) && !g.ready[s]) { Hearts.setReady(g, s); changed = true; }
     }
   }
-  function hostStep() { if (g && g.game === 'rummy') return rHostStep(); if (g && g.game === 'whist') return wHostStep(); hostAutoBots(); hostPublish(); hostSchedule(); }
+  function hostStep() { if (g && g.pause) { clearTimeout(hostTimer); return hostRepublish(); } if (g && g.game === 'rummy') return rHostStep(); if (g && g.game === 'whist') return wHostStep(); hostAutoBots(); hostPublish(); hostSchedule(); }
   function hostSchedule() {
     clearTimeout(hostTimer);
     if (g.phase === 'trickEnd') hostTimer = setTimeout(() => { Hearts.collectTrick(g); hostStep(); }, SPEED.trick);
@@ -2328,7 +2395,7 @@ const WBot = (() => {
       claimAck: g.claimAck || [false, false, false, false],
       claimCards: g.claiming != null ? Hearts.sortHand(g.hands[g.claiming]) : null, claimed: g.claimed || null,
       claimPts: g.claiming != null ? g.hands.flat().reduce((a, c) => a + Hearts.pts(c), 0) : null,
-      playOut: !!g.playOut, finishAsk: Hearts.canFinish(g) && !g.playOut,
+      playOut: !!g.playOut, finishAsk: Hearts.canFinish(g) && !g.playOut, pause: g.pause || null,
     };
     const up = { state: JSON.parse(JSON.stringify(st)) };
     for (let s = 0; s < 4; s++) up['hands/' + s] = { cards: g.hands[s], received: g.received[s] || [], passSel: g.passSel[s] || null };
@@ -2502,6 +2569,7 @@ const WBot = (() => {
     st.winner = v.winner != null ? v.winner : null;
     st.review = v.review ? { seat: v.review.seat, ack: arr4(v.review.ack, false),
       prev: list(v.review.prev).map(m => ({ id: m.id, type: m.type, owner: m.owner, cards: list(m.cards) })) } : null;
+    st.pause = pnorm(v.pause);
     return st;
   }
 
@@ -2544,7 +2612,8 @@ const WBot = (() => {
       <div class="who"><b>${UI.esc(N[s])}</b><small>${UI.esc(p.note || '')}</small></div>
       <div class="rinfo">${s !== mySeat ? `<span class="rcnt"><i class="back"></i>${pub.counts[s] || 0}</span>` : ''}<span class="score">${pub.scores[s]}</span></div></div>`;
   }
-  function rRedraw() {
+  function rRedraw() { rRedraw0(); if (!rDragging) pauseModal(); }
+  function rRedraw0() {
     if (rDragging) { rHeld = true; return; }
     rMount();
     const N = names();
@@ -2815,6 +2884,7 @@ const WBot = (() => {
   }
   const R_PASS_MS = 4000;   // pause between turns so everyone sees the discard
   function rHostStep() {
+    if (g.pause) { clearTimeout(hostTimer); return rHostPublish(); }
     if (g.phase === 'play' && g.step === 'draw') g.turnCards = g.melds.flatMap(m => m.cards);   // table at the start of this turn
     if (g.phase === 'handEnd') for (let s = 0; s < 4; s++) if (isBot(s) && !g.ready[s]) Rummy.setReady(g, s);
     if (g.review) for (let s = 0; s < 4; s++) if (isBot(s) && g.review && !g.review.ack[s]) Rummy.ackReview(g, s);
@@ -2836,7 +2906,7 @@ const WBot = (() => {
       game: 'rummy', active: g.active, phase: g.phase, handNum: g.handNum, dealer: g.dealer, names: g.names, target: g.target, nCards: g.nCards, seq: g.seq,
       scores: g.scores, history: g.history, turn: g.turn, step: g.step, discard: g.discard, melds: g.melds, meldSeq: g.meldSeq,
       counts: g.hands.map(x => x.length), stockCount: g.stock.length, drewFrom: g.drewFrom, takenCard: g.takenCard, reshuffles: g.reshuffles,
-      last: g.last, ready: g.ready, winner: g.winner, handDelta: g.handDelta, winners: g.winners, left: over ? g.hands : null, review: g.review,
+      last: g.last, ready: g.ready, winner: g.winner, handDelta: g.handDelta, winners: g.winners, left: over ? g.hands : null, review: g.review, pause: g.pause || null,
       endNew: over && g.turnCards ? g.melds.flatMap(m => m.cards).filter(c => !g.turnCards.includes(c)) : null,
     };
     const up = { state: JSON.parse(JSON.stringify(st)) };
@@ -2852,7 +2922,7 @@ const WBot = (() => {
       dealer: st.dealer, phase: st.phase, seq: st.seq || 0, meldSeq: st.meldSeq || Math.max(0, ...st.melds.map(m => m.id)),
       hands: hs.map(x => list(x && x.cards)), stock, discard: st.discard, melds: st.melds, turn: st.turn, step: st.step,
       drewFrom: st.drewFrom || null, takenCard: st.takenCard || null, reshuffles: st.reshuffles || 0, last: st.last || null,
-      ready: st.ready, winner: st.winner, handDelta: st.handDelta, winners: st.winners.length ? st.winners : null, review: st.review };
+      ready: st.ready, winner: st.winner, handDelta: st.handDelta, winners: st.winners.length ? st.winners : null, review: st.review, pause: st.pause };
     rHostStep();
     const pending = (await room.child('actions').get()).val() || {};
     Object.keys(pending).forEach(k => hostAction(+k, pending[k], room.child('actions/' + k)));
@@ -2936,6 +3006,7 @@ const WBot = (() => {
     st.turn = v.turn != null ? v.turn : -1;
     st.tricksPlayed = v.tricksPlayed || 0;
     st.trump = v.trump || null;
+    st.pause = pnorm(v.pause);
     return st;
   }
 
@@ -2984,7 +3055,7 @@ const WBot = (() => {
     if (b && !b.disabled && isWhist()) wOnAction('decl:' + b.dataset.decl);
   });
   function wOnCard(id) {
-    if (!pub || pub.phase !== 'playing' || pub.turn !== mySeat || sent) return;
+    if (!pub || pub.pause || pub.phase !== 'playing' || pub.turn !== mySeat || sent) return;
     if (!Whist.legalPlays(myHand.cards, pub.trick, pub.trump, pub.tricksPlayed).includes(id)) return;
     if (armed === id) { armed = null; sent = true; send({ type: 'play', card: id }); }
     else armed = id;
@@ -3044,6 +3115,7 @@ const WBot = (() => {
     if (ok) wHostStep(); else wHostPublish();
   }
   function wHostStep() {
+    if (g.pause) { clearTimeout(hostTimer); return wHostPublish(); }
     if (g.phase === 'handEnd') for (let s = 0; s < 4; s++) if (isBot(s) && !g.ready[s]) Whist.setReady(g, s);
     wHostPublish();
     clearTimeout(hostTimer);
@@ -3057,7 +3129,7 @@ const WBot = (() => {
       game: 'whist', phase: g.phase, handNum: g.handNum, names: g.names, seq: g.seq, target: g.target, bonus: g.bonus, penalty: g.penalty,
       first: g.first, scores: g.scores, history: g.history, used: g.used, declarer: g.declarer, trump: g.trump,
       turn: g.turn, leader: g.leader, trick: g.trick, trickWinner: g.trickWinner, lastTrick: g.lastTrick, tricksPlayed: g.tricksPlayed,
-      taken: g.taken, played: g.played, ready: g.ready, handDelta: g.handDelta, winners: g.winners, counts: g.hands.map(h => h.length),
+      taken: g.taken, played: g.played, ready: g.ready, handDelta: g.handDelta, winners: g.winners, counts: g.hands.map(h => h.length), pause: g.pause || null,
     };
     const up = { state: JSON.parse(JSON.stringify(st)) };
     for (let s = 0; s < 4; s++) up['hands/' + s] = { cards: g.hands[s] };
@@ -3071,7 +3143,7 @@ const WBot = (() => {
       first: st.first || 0, scores: st.scores, history: st.history, handNum: st.handNum, used: st.used, seq: st.seq || 0,
       declarer: st.declarer, trump: st.trump, phase: st.phase, turn: st.turn, leader: st.leader, trick: st.trick, trickWinner: st.trickWinner,
       lastTrick: st.lastTrick, tricksPlayed: st.tricksPlayed, taken: st.taken, played: list(st.played), ready: st.ready,
-      handDelta: st.handDelta, winners: st.winners.length ? st.winners : null, hands: hs.map(h => list(h && h.cards)),
+      handDelta: st.handDelta, winners: st.winners.length ? st.winners : null, hands: hs.map(h => list(h && h.cards)), pause: st.pause,
     };
     wHostStep();
     const pending = (await room.child('actions').get()).val() || {};
