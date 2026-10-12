@@ -1584,7 +1584,7 @@ const WBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 19;
+  const APP_VER = 20;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -1661,7 +1661,7 @@ const WBot = (() => {
       const mine = arr4(ps.val(), null).some(p => p && p.uid === uid && !p.bot);
       if (!m.exists() || !mine) { try { localStorage.removeItem('cg-last-room'); } catch (e) {} return; }
       if (UI.currentModal() !== 'lobby') return;
-      const b = Object.assign(document.createElement('button'), { className: 'btn', textContent: h('rejoin', c) });
+      const b = Object.assign(document.createElement('button'), { className: 'btn', textContent: h('rejoin', c, gameName((m.val() || {}).game)) });
       b.style.width = '100%'; b.style.marginBottom = '10px';
       b.onclick = () => { document.getElementById('cd').value = c; go('join'); };
       sheet.querySelector('h2').after(b);
@@ -1715,7 +1715,7 @@ const WBot = (() => {
       newVer: 'יש גרסה חדשה – טוען מחדש…', pauseBtn: '⏸ הפסקה', pauseToo: '⏸ גם אני יוצא/ת להפסקה', pauseH: '⏸ הפסקה', backBtn: 'חזרתי',
       pauseMine: 'יצאת להפסקה. המשחק עוצר עד שתחזור/י ותלחץ/י "חזרתי".', pauseAlso: l => `גם ${l} בהפסקה.`,
       pauseOther: l => `${l} יצא/ה להפסקה קצרה. המשחק ממתין לחזרה.`, resumeQ: n => `${n} חזר/ה. ממשיכים?`, resumeBtn: 'המשך',
-      pauseWait: l => `ממתינים ל: ${l}`, forceBtn: 'המשך עכשיו', forceNote: 'כמארח/ת אפשר להמשיך בלי לחכות.', rejoin: c => `↩ חזרה לשולחן ${c}`, leftLobby: n => `${n} עזב/ה את השולחן`, leftGame: n => `${n} עזב/ה את השולחן. רובוט ממשיך במקומו/ה.`,
+      pauseWait: l => `ממתינים ל: ${l}`, forceBtn: 'המשך עכשיו', forceNote: 'כמארח/ת אפשר להמשיך בלי לחכות.', rejoin: (c, gm) => `↩ חזרה לשולחן ${c} · ${gm}`, leftLobby: n => `${n} עזב/ה את השולחן`, leftGame: n => `${n} עזב/ה את השולחן. רובוט ממשיך במקומו/ה.`,
       newHost: n => `${n} הוא/היא המארח/ת עכשיו`, youHost: 'אתה המארח עכשיו. המשחק ממשיך אצלך.',
       leave: 'עזוב שולחן', leaveQ: 'לעזוב את השולחן?', leaveBtn: 'כן, לעזוב',
       leaveLobby: 'המקום שלך בשולחן יתפנה.', leaveGame: 'המקום שלך יעבור לרובוט, והמשחק ימשיך בלעדיך.',
@@ -1748,7 +1748,7 @@ const WBot = (() => {
       pauseBtn: '⏸ Break', pauseToo: '⏸ I need a break too', pauseH: '⏸ Break', backBtn: "I'm back",
       pauseMine: 'You are on a break. The game waits until you return and press "I\'m back".', pauseAlso: l => `${l} is on a break too.`,
       pauseOther: l => `${l} stepped away for a short break. The game is waiting.`, resumeQ: n => `${n} is back. Continue?`, resumeBtn: 'Continue',
-      pauseWait: l => `Waiting for: ${l}`, forceBtn: 'Continue now', forceNote: 'As host you can continue without waiting.', rejoin: c => `↩ Back to table ${c}`,
+      pauseWait: l => `Waiting for: ${l}`, forceBtn: 'Continue now', forceNote: 'As host you can continue without waiting.', rejoin: (c, gm) => `↩ Back to table ${c} · ${gm}`,
       leftLobby: n => `${n} left the table`, leftGame: n => `${n} left the table. A robot is playing in their place.`,
       newHost: n => `${n} is now the host`, youHost: "You're now the host. The game continues on your device.",
       leave: 'Leave table', leaveQ: 'Leave the table?', leaveBtn: 'Yes, leave',
@@ -1953,7 +1953,7 @@ const WBot = (() => {
           const seats = ps.map(p => !p ? `<span class="adm-seat empty">—</span>` :
             `<span class="adm-seat"><i class="dot ${p.bot || p.online !== false ? 'on' : ''}"></i>${p.bot ? '🤖 ' : ''}${UI.esc(I18N.mapName(p.name || '?'))}</span>`).join('');
           const sc = st.scores ? ` · ${arr4(st.scores, 0).join(' / ')}` : '';
-          return `<div class="adm-card">${r.meta.game === 'rummy' ? '🃏' : r.meta.game === 'whist' ? '♠' : '♥'} <b dir="ltr">${UI.esc(c)}</b> · ${UI.esc(phase)}${sc}
+          return `<div class="adm-card">${r.meta.game === 'rummy' ? '🃏' : r.meta.game === 'whist' ? '♠' : '♥'} <b>${UI.esc(gameName(r.meta.game))}</b> · <b dir="ltr">${UI.esc(c)}</b> · ${UI.esc(phase)}${sc}
             <div class="adm-sub">${h('host')}: ${UI.esc(r.meta.hostName || (ps[0] && ps[0].name) || '?')}${r.meta.hostEmail ? ` <bdi dir="ltr">(${UI.esc(r.meta.hostEmail)})</bdi>` : ''} · ${h('opened')} ${fmtTime(r.meta.created)}</div>
             <div class="adm-seats">${seats}</div><div class="adm-row">${btn('close', c, h('closeRoom'), true)}</div></div>`;
         }).join('') : `<p>${h('noRooms')}</p>`);
