@@ -1584,7 +1584,7 @@ const WBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 20;
+  const APP_VER = 21;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -1718,7 +1718,7 @@ const WBot = (() => {
       pauseWait: l => `ממתינים ל: ${l}`, forceBtn: 'המשך עכשיו', forceNote: 'כמארח/ת אפשר להמשיך בלי לחכות.', rejoin: (c, gm) => `↩ חזרה לשולחן ${c} · ${gm}`, leftLobby: n => `${n} עזב/ה את השולחן`, leftGame: n => `${n} עזב/ה את השולחן. רובוט ממשיך במקומו/ה.`,
       newHost: n => `${n} הוא/היא המארח/ת עכשיו`, youHost: 'אתה המארח עכשיו. המשחק ממשיך אצלך.',
       leave: 'עזוב שולחן', leaveQ: 'לעזוב את השולחן?', leaveBtn: 'כן, לעזוב',
-      leaveLobby: 'המקום שלך בשולחן יתפנה.', leaveGame: 'המקום שלך יעבור לרובוט, והמשחק ימשיך בלעדיך.',
+      leaveLobby: 'המקום שלך בשולחן יתפנה.', leaveOver: 'תחזור/י למסך הפתיחה, ושם אפשר לפתוח שולחן חדש או לבחור משחק אחר.', leaveGame: 'המקום שלך יעבור לרובוט, והמשחק ימשיך בלעדיך.',
       leaveHostPass: n => `${n} יהפוך למארח של השולחן.`, leaveHostClose: 'אין בשולחן שחקנים אחרים, ולכן השולחן ייסגר.',
       hostH: 'פתיחת שולחן', hostP: 'רק מארחים שמנהל המשחק אישר יכולים לפתוח שולחנות. התחבר עם חשבון ה־Google שלך כדי שנבדוק אם אתה ברשימה.',
       google: 'התחבר עם Google', loginFail: m => 'ההתחברות נכשלה: ' + m,
@@ -1752,7 +1752,7 @@ const WBot = (() => {
       leftLobby: n => `${n} left the table`, leftGame: n => `${n} left the table. A robot is playing in their place.`,
       newHost: n => `${n} is now the host`, youHost: "You're now the host. The game continues on your device.",
       leave: 'Leave table', leaveQ: 'Leave the table?', leaveBtn: 'Yes, leave',
-      leaveLobby: 'Your seat will be freed.', leaveGame: 'A robot will take your seat and the game will go on without you.',
+      leaveLobby: 'Your seat will be freed.', leaveOver: "You'll go back to the start screen, where you can open a new table or pick another game.", leaveGame: 'A robot will take your seat and the game will go on without you.',
       leaveHostPass: n => `${n} will become the host.`, leaveHostClose: 'There are no other players, so the table will be closed.',
       hostH: 'Open a table', hostP: 'Only hosts approved by the game admin can open tables. Sign in with your Google account so we can check whether you are on the list.',
       google: 'Sign in with Google', loginFail: m => 'Sign-in failed: ' + m,
@@ -2162,7 +2162,7 @@ const WBot = (() => {
       ? `<p>${t('readyList', [0, 1, 2, 3].filter(s => pub.ready[s]).map(s => UI.esc(N[s])).join(', ') || t('nobodyYet'))}</p>` : '';
     const btns = ph === 'handEnd'
       ? [{ label: t(pub.ready[mySeat] ? 'waitOthers' : 'readyBtn'), disabled: pub.ready[mySeat], onClick: () => send({ type: 'ready' }) }]
-      : (isHost() ? [{ label: t('restart'), onClick: hostRestart }] : []);
+      : [...(isHost() ? [{ label: t('restart'), onClick: hostRestart }] : []), { label: '🚪 ' + h('leave'), ghost: true, onClick: leaveTable }];
     const html = Common.handEndHTML(pub, N, mySeat) + readyLine +
       (ph === 'gameOver' ? UI.scoreTable(N, pub.history, pub.scores, mySeat) + (isHost() ? '' : `<p>${t('hostCanRestart')}</p>`) : '');
     UI.modal(key, html, btns);
@@ -2246,7 +2246,7 @@ const WBot = (() => {
     const inGame = pub && pub.phase !== 'lobby';
     const others = [0, 1, 2, 3].filter(s => s !== mySeat && players[s] && !players[s].bot);
     const next = others.find(s => players[s].online !== false) ?? others[0];
-    let p = h(inGame ? 'leaveGame' : 'leaveLobby');
+    let p = h(pub && pub.phase === 'gameOver' ? 'leaveOver' : inGame ? 'leaveGame' : 'leaveLobby');
     if (isHost()) p = next == null ? h('leaveHostClose') : p + ' ' + h('leaveHostPass', UI.esc(I18N.mapName(players[next].name)));
     UI.modal('leave', `<h2>${h('leaveQ')}</h2><p>${p}</p>`, [
       { label: h('leaveBtn'), onClick: async () => {
@@ -2263,7 +2263,7 @@ const WBot = (() => {
         } catch (e) {}
         location.href = location.pathname;
       } },
-      { label: t('cancel'), ghost: true, close: true }]);
+      { label: t('cancel'), ghost: true, onClick: () => { UI.closeModal('leave'); redraw(); } }]);
   }
   function switchLang() { I18N.setLang(I18N.other()); UI.applyLang('titleOnline'); setHeader(); }
   function setHeader() {
@@ -2864,7 +2864,7 @@ const WBot = (() => {
     const ready = ph === 'handEnd' ? `<p>${t('readyList', [0, 1, 2, 3].filter(s => pub.active[s] && pub.ready[s]).map(s => UI.esc(N[s])).join(', ') || t('nobodyYet'))}</p>` : '';
     const btns = ph === 'handEnd'
       ? [{ label: t(pub.ready[mySeat] ? 'waitOthers' : 'readyBtn'), disabled: pub.ready[mySeat], onClick: () => send({ type: 'ready' }) }]
-      : (isHost() ? [{ label: t('restart'), onClick: hostRestart }] : []);
+      : [...(isHost() ? [{ label: t('restart'), onClick: hostRestart }] : []), { label: '🚪 ' + h('leave'), ghost: true, onClick: leaveTable }];
     btns.push({ label: rt('peekBtn'), ghost: true, onClick: () => { rPeek = pk; rRedraw(); } });
     UI.modal('rend', `<h2>${UI.esc(title)}</h2>${line}
       <div class="tbl-wrap"><table class="sc"><thead><tr><th style="text-align:start">${t('colPlayer')}</th><th>${rt('colLeft')}</th><th>${rt('colPts')}</th><th>${rt('colTot')}</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -3095,17 +3095,17 @@ const WBot = (() => {
   function wEndModal(N) {
     const ph = pub.phase;
     if (ph !== 'handEnd' && ph !== 'gameOver') { UI.closeModal('wend'); return; }
-    const h = pub.history[pub.history.length - 1] || { k: [0, 0, 0, 0], p: [0, 0, 0, 0], t: null, d: 0 };
+    const hh = pub.history[pub.history.length - 1] || { k: [0, 0, 0, 0], p: [0, 0, 0, 0], t: null, d: 0 };
     const title = ph === 'gameOver' ? (pub.winners.includes(mySeat) ? wt('youWon') : wt('wonBy', pub.winners.map(i => N[i]).join(t('and')))) : wt('handOver', pub.handNum + 1);
-    const rows = [0, 1, 2, 3].map(s => `<tr><td class="n">${UI.esc(N[s])}${s === mySeat ? t('me') : ''}</td><td>${h.k[s]}</td><td dir="ltr">${h.p[s] > 0 ? '+' : ''}${h.p[s]}</td><td style="font-family:var(--serif);font-weight:700" dir="ltr">${pub.scores[s]}</td></tr>`).join('');
-    const all = [0, 1, 2, 3].find(s => h.k[s] === 13), zero = [0, 1, 2, 3].filter(s => h.k[s] === 0);
+    const rows = [0, 1, 2, 3].map(s => `<tr><td class="n">${UI.esc(N[s])}${s === mySeat ? t('me') : ''}</td><td>${hh.k[s]}</td><td dir="ltr">${hh.p[s] > 0 ? '+' : ''}${hh.p[s]}</td><td style="font-family:var(--serif);font-weight:700" dir="ltr">${pub.scores[s]}</td></tr>`).join('');
+    const all = [0, 1, 2, 3].find(s => hh.k[s] === 13), zero = [0, 1, 2, 3].filter(s => hh.k[s] === 0);
     const notes = (all != null ? `<p>${wt('bonusNote', UI.esc(N[all]), pub.bonus)}</p>` : '') + (zero.length ? `<p>${wt('penNote', zero.map(s => UI.esc(N[s])).join(', '), pub.penalty)}</p>` : '');
     const ready = ph === 'handEnd' ? `<p>${t('readyList', [0, 1, 2, 3].filter(s => pub.ready[s]).map(s => UI.esc(N[s])).join(', ') || t('nobodyYet'))}</p>` : '';
     const btns = ph === 'handEnd'
       ? [{ label: t(pub.ready[mySeat] ? 'waitOthers' : 'readyBtn'), disabled: pub.ready[mySeat], onClick: () => send({ type: 'ready' }) }]
-      : (isHost() ? [{ label: t('restart'), onClick: hostRestart }] : []);
+      : [...(isHost() ? [{ label: t('restart'), onClick: hostRestart }] : []), { label: '🚪 ' + h('leave'), ghost: true, onClick: leaveTable }];
     btns.push({ label: wt('declBtn'), ghost: true, onClick: () => UI.modal('decls', `<h2>${wt('declH')}</h2>` + wDeclTable(N), [{ label: t('back'), onClick: () => { UI.closeModal(); redraw(); } }]) });
-    UI.modal('wend', `<h2>${UI.esc(title)}</h2><p>${wt('trumpIs', wOpt(h.t), UI.esc(N[h.d]))}</p>
+    UI.modal('wend', `<h2>${UI.esc(title)}</h2><p>${wt('trumpIs', wOpt(hh.t), UI.esc(N[hh.d]))}</p>
       <div class="tbl-wrap"><table class="sc"><thead><tr><th style="text-align:start">${t('colPlayer')}</th><th>${wt('colTricks')}</th><th>${wt('colPts')}</th><th>${wt('colTot')}</th></tr></thead><tbody>${rows}</tbody></table></div>
       ${notes}${ready}${ph === 'gameOver' ? wScoreTable(N) + (isHost() ? '' : `<p>${t('hostCanRestart')}</p>`) : ''}`, btns);
   }
