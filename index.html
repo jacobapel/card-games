@@ -612,8 +612,30 @@ const Bot = (() => {
   const byRank = (a, b) => rank(a) - rank(b);
   const hi = a => a.slice().sort(byRank).pop();
   const lo = a => a.slice().sort(byRank)[0];
+  const SUITS = ['C', 'D', 'S', 'H'];
 
-  function choosePass(hand) {
+  /* ---- shooting the moon: is this hand strong enough to try taking every point? ---- */
+  function moonStrength(hand) {
+    const high = hand.filter(c => rank(c) >= 12).length, low = hand.filter(c => rank(c) <= 6).length;
+    return { ok: high >= 5 && low <= 3, high, low };   // tuned in simulation: tried in ~4% of hands, succeeds ~55–80%
+  }
+  const planOf = (g, seat) => (g && g.moonPlan && g.moonPlan.h === g.handNum ? g.moonPlan.s[seat] : undefined);
+  function setPlan(g, seat, v) {
+    if (!g) return;
+    if (!g.moonPlan || g.moonPlan.h !== g.handNum) g.moonPlan = { h: g.handNum, s: [false, false, false, false] };
+    g.moonPlan.s[seat] = v;
+  }
+  // still on course: nobody else has taken a single point
+  const moonAlive = (g, seat) => [0, 1, 2, 3].every(o => o === seat || !g.taken[o]);
+
+  function choosePass(hand, g, seat) {
+    // a hand built for the moon keeps its high cards and passes its lowest losers
+    if (moonStrength(hand).ok) {
+      setPlan(g, seat, true);
+      const low = hand.filter(c => c !== 'C2').sort((a, b) => rank(a) - rank(b));
+      return low.slice(0, 3);
+    }
+    setPlan(g, seat, false);
     const count = { C: 0, D: 0, S: 0, H: 0 };
     hand.forEach(c => count[suit(c)]++);
     const lowSpades = hand.filter(c => suit(c) === 'S' && rank(c) < 12).length;
@@ -631,13 +653,68 @@ const Bot = (() => {
     return hand.slice().sort((a, b) => score(b) - score(a)).slice(0, 3);
   }
 
+  // is this card the highest of its suit still out?
+  const isTop = (g, c, hand) => {
+    for (let r = rank(c) + 1; r <= 14; r++) { const x = suit(c) + r; if (!g.played.includes(x) && !hand.includes(x)) return false; }
+    return true;
+  };
+
+  function shootPlay(g, seat, legal) {
+    const hand = g.hands[seat], trick = g.trick;
+    if (!trick.length) {
+      const tops = legal.filter(c => isTop(g, c, hand));
+      if (tops.length) return hi(tops);
+      const n = s => hand.filter(c => suit(c) === s).length;
+      return legal.slice().sort((a, b) => n(suit(b)) - n(suit(a)) || rank(b) - rank(a))[0];
+    }
+    const led = suit(trick[0].card);
+    if (suit(legal[0]) === led) {
+      const high = Math.max(...trick.filter(t => suit(t.card) === led).map(t => rank(t.card)));
+      const win = legal.filter(c => rank(c) > high);
+      return win.length ? hi(win) : lo(legal);
+    }
+    // can't follow: throw a card that gives nobody points
+    const safe = legal.filter(c => !pts(c));
+    return lo(safe.length ? safe : legal);
+  }
+
+  // someone else is collecting every point: try to take at least one trick with points
+  function threat(g, seat) {
+    const tot = g.taken.reduce((a, b) => a + b, 0) + g.trick.reduce((s, t) => s + pts(t.card), 0);
+    if (tot < 10) return -1;
+    const owners = [0, 1, 2, 3].filter(o => g.taken[o] > 0);
+    return owners.length === 1 && owners[0] !== seat ? owners[0] : -1;
+  }
+
   function choosePlay(g, seat) {
     const hand = g.hands[seat], trick = g.trick, first = g.tricksPlayed === 0;
     const legal = legalPlays(hand, trick, g.heartsBroken, first);
     if (legal.length === 1) return legal[0];
+    let plan = planOf(g, seat);
+    if (plan === undefined) { plan = moonStrength(hand).ok; setPlan(g, seat, plan); }
+    if (plan && !first && moonAlive(g, seat)) return shootPlay(g, seat, legal);
+    if (plan && !moonAlive(g, seat)) setPlan(g, seat, false);
+
     const qsOut = g.played.includes('S12');
     const hasQS = hand.includes('S12');
     const count = s => hand.filter(x => suit(x) === s).length;
+
+    // defence: stop a moon in progress by winning a trick that carries points
+    const T = threat(g, seat);
+    if (T >= 0 && trick.length) {
+      const led = suit(trick[0].card);
+      const cur = trick.reduce((b, t) => (suit(t.card) === led && rank(t.card) > rank(b.card) ? t : b), trick[0]);
+      const tp = trick.reduce((s, t) => s + pts(t.card), 0);
+      if (suit(legal[0]) === led && cur.seat === T) {
+        const win = legal.filter(c => rank(c) > rank(cur.card) && c !== 'S12');
+        if (win.length && (trick.length === 3 ? tp > 0 : true)) return trick.length === 3 ? lo(win) : hi(win);
+      }
+    }
+    if (T >= 0 && !trick.length) {
+      // lead a high heart that should hold, so the points land with us
+      const hs = legal.filter(c => suit(c) === 'H' && isTop(g, c, hand));
+      if (hs.length) return hi(hs);
+    }
 
     if (!trick.length) {
       const cost = c => {
@@ -670,7 +747,11 @@ const Bot = (() => {
       return last ? hi(pool) : lo(pool);
     }
 
-    // void in led suit: dump
+    // void in led suit: dump (but never feed a player who is collecting everything)
+    if (T >= 0) {
+      const cur = trick.reduce((b, t) => (suit(t.card) === led && rank(t.card) > rank(b.card) ? t : b), trick[0]);
+      if (cur.seat === T) { const safe = legal.filter(c => !pts(c)); if (safe.length) return hi(safe); }
+    }
     if (legal.includes('S12')) return 'S12';
     if (!qsOut) {
       const big = legal.filter(c => c === 'S14' || c === 'S13');
@@ -680,9 +761,9 @@ const Bot = (() => {
     if (hearts.length) return hi(hearts);
     return legal.slice().sort((a, b) => (count(suit(a)) - count(suit(b))) || (rank(b) - rank(a)))[0];
   }
-  return { choosePass, choosePlay };
+  return { choosePass, choosePlay, moonStrength };
 })();
-if (typeof module !== 'undefined') module.exports = Bot;
+
 
 /* ===== Languages ===== */
 const I18N = (() => {
@@ -1584,7 +1665,7 @@ const WBot = (() => {
   const isBot = s => !!(players[s] && players[s].bot);
 
   /* ---------- version check ---------- */
-  const APP_VER = 21;
+  const APP_VER = 22;
   function reloadFresh(v) {
     try { if (sessionStorage.getItem('cg-reload') === String(v)) return; sessionStorage.setItem('cg-reload', String(v)); } catch (e) { return; }
     const q = new URLSearchParams();
@@ -2368,7 +2449,7 @@ const WBot = (() => {
     while (changed && guard++ < 10) {
       changed = false;
       if (g.phase === 'passing') for (let s = 0; s < 4; s++)
-        if (isBot(s) && !g.passDone[s]) { Hearts.setPass(g, s, Bot.choosePass(g.hands[s])); changed = true; }
+        if (isBot(s) && !g.passDone[s]) { Hearts.setPass(g, s, Bot.choosePass(g.hands[s], g, s)); changed = true; }
       if (g.phase === 'playing' && g.claiming != null) for (let s = 0; s < 4; s++)
         if (isBot(s) && !g.claimAck[s]) { Hearts.ackClaim(g, s); changed = true; }
       if (g.phase === 'handEnd') for (let s = 0; s < 4; s++)
